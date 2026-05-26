@@ -17,6 +17,7 @@ export interface VintedItem {
   condition_label: string;
   seller_name: string;
   seller_id: number;
+  catalog_id: number | null;
 }
 
 @Injectable()

@@ -115,6 +115,7 @@ export class VintedClient {
       condition_label: item.status ?? '',
       seller_name: item.user?.login ?? '',
       seller_id: item.user?.id ?? 0,
+      catalog_id: item.catalog_id ?? null,
     };
   }
 }

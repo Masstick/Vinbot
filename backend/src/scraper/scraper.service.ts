@@ -80,10 +80,18 @@ export class ScraperService implements OnModuleInit {
         return;
       }
 
+      const filteredItems = keyword.catalog_id
+        ? items.filter(item => item.catalog_id === keyword.catalog_id)
+        : items;
+
+      if (filteredItems.length < items.length) {
+        this.logger.log(`  → Filtre catégorie ${keyword.catalog_id} : ${filteredItems.length}/${items.length} items conservés`);
+      }
+
       let newCount = 0;
       let alertCount = 0;
 
-      for (const item of items) {
+      for (const item of filteredItems) {
         const { listing, isNew, priceChanged } = await this.listingsService.upsertListing(item, keyword);
 
         if (!isNew && !priceChanged) continue;
@@ -120,7 +128,7 @@ export class ScraperService implements OnModuleInit {
         }
       }
 
-      this.logger.log(`  → ${items.length} annonces | ${newCount} nouvelles/modifiées | ${alertCount} alertes`);
+      this.logger.log(`  → ${filteredItems.length} annonces | ${newCount} nouvelles/modifiées | ${alertCount} alertes`);
     } catch (err: any) {
       if (err.message === 'BANNED') {
         this.logger.warn(`Keyword #${keyword.id} bloqué (403) — pause 60s`);
