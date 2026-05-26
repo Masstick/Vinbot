@@ -1,0 +1,112 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-border: var(--card-border);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-profit: var(--profit);
+  --color-opportunity: var(--opportunity);
+  
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+:root {
+  /* Theme sombre de base "Pro Trading" */
+  --background: #09090b; /* zinc-950 */
+  --foreground: #fafafa; /* zinc-50 */
+  --card: #18181b;       /* zinc-900 */
+  --card-border: #27272a; /* zinc-800 */
+  
+  /* Accents */
+  --brand: #4f46e5;       /* Indigo-600 */
+  --brand-hover: #6366f1; /* Indigo-500 */
+  --profit: #10b981;      /* Emerald-500 */
+  --opportunity: #06b6d4; /* Cyan-500 */
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  overflow-x: hidden;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #09090b;
+}
+::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
+}
+
+/* Utility styles */
+.glass-panel {
+  background: rgba(24, 24, 27, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(63, 63, 70, 0.4);
+}
+
+.glow-indigo {
+  box-shadow: 0 0 25px -5px rgba(79, 70, 229, 0.15);
+}
+
+.glow-emerald {
+  box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.15);
+}
+
+.glow-cyan {
+  box-shadow: 0 0 25px -5px rgba(6, 182, 212, 0.15);
+}
+
+/* Animations de transition fluides */
+.page-transition {
+  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.pulse-glow {
+  animation: pulseGlow 2s infinite alternate;
+}
+
+@keyframes pulseGlow {
+  0% {
+    box-shadow: 0 0 5px rgba(79, 70, 229, 0.2);
+  }
+  100% {
+    box-shadow: 0 0 15px rgba(79, 70, 229, 0.5);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
