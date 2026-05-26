@@ -98,9 +98,7 @@ export class ScraperService implements OnModuleInit {
         const targetMargin = parseFloat(String(keyword.target_margin ?? 10));
         const maxPrice = keyword.max_price ? parseFloat(String(keyword.max_price)) : null;
 
-        const shouldAlert =
-          (potentialProfit >= targetMargin) ||
-          (maxPrice !== null && item.price <= maxPrice);
+        const shouldAlert = potentialProfit >= targetMargin;
 
         if (shouldAlert && marketAvg > 0) {
           // Notification Telegram (1x par 24h par annonce)
