@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS keywords (
   target_margin         DECIMAL(10,2) DEFAULT 10,
   shipping_estimate     DECIMAL(10,2) DEFAULT 4,
   category              VARCHAR(100),
+  catalog_id            INTEGER,
   scan_interval_seconds INTEGER DEFAULT 120,
   active                BOOLEAN DEFAULT true,
   created_at            TIMESTAMPTZ DEFAULT NOW(),
