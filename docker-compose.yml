@@ -39,11 +39,11 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://192.168.0.40:3003
     restart: unless-stopped
     ports:
       - "3002:3000"
-    environment:
-      NEXT_PUBLIC_API_URL: http://192.168.0.40:3003
 
 volumes:
   postgres_data:
