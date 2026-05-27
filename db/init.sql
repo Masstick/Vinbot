@@ -61,3 +61,40 @@ CREATE INDEX IF NOT EXISTS idx_price_history_listing_id ON price_history(listing
 CREATE INDEX IF NOT EXISTS idx_kl_keyword_id ON keyword_listings(keyword_id);
 CREATE INDEX IF NOT EXISTS idx_kl_deal_score ON keyword_listings(deal_score DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_log ON notifications_log(listing_id, keyword_id, sent_at);
+
+-- ── Mistral Deal Intelligence ─────────────────────────────────────────────
+
+ALTER TABLE listings
+  ADD COLUMN IF NOT EXISTS model_label VARCHAR(200),
+  ADD COLUMN IF NOT EXISTS model_confidence DECIMAL(3,2);
+
+ALTER TABLE keywords
+  ADD COLUMN IF NOT EXISTS market_scan_pages INTEGER DEFAULT 5;
+
+CREATE TABLE IF NOT EXISTS deal_analyses (
+  id             SERIAL PRIMARY KEY,
+  listing_id     INTEGER REFERENCES listings(id) ON DELETE CASCADE,
+  keyword_id     INTEGER REFERENCES keywords(id) ON DELETE SET NULL,
+  scam_risk      VARCHAR(10) NOT NULL,
+  confidence     DECIMAL(3,2),
+  recommendation VARCHAR(10) NOT NULL,
+  reasoning      TEXT,
+  analyzed_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS model_market_avg (
+  keyword_id   INTEGER NOT NULL REFERENCES keywords(id) ON DELETE CASCADE,
+  model_label  VARCHAR(200) NOT NULL,
+  avg_price    DECIMAL(10,2),
+  item_count   INTEGER DEFAULT 0,
+  last_updated TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (keyword_id, model_label)
+);
+
+ALTER TABLE keyword_listings
+  ADD COLUMN IF NOT EXISTS model_market_avg DECIMAL(10,2),
+  ADD COLUMN IF NOT EXISTS analysis_id INTEGER REFERENCES deal_analyses(id);
+
+CREATE INDEX IF NOT EXISTS idx_da_listing ON deal_analyses(listing_id);
+CREATE INDEX IF NOT EXISTS idx_da_recommendation ON deal_analyses(recommendation, scam_risk);
+CREATE INDEX IF NOT EXISTS idx_mma_keyword ON model_market_avg(keyword_id);
