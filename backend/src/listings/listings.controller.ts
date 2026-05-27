@@ -15,6 +15,11 @@ export class ListingsController {
     return this.service.getOpportunities(keywordId ? parseInt(keywordId) : undefined);
   }
 
+  @Get('validated')
+  getValidated(@Query('limit') limit?: string) {
+    return this.service.getValidated(limit ? parseInt(limit) : 50);
+  }
+
   @Get('stats')
   getStats() {
     return this.service.getStats();
