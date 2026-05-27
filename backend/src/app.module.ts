@@ -5,11 +5,14 @@ import { KeywordsModule } from './keywords/keywords.module';
 import { ListingsModule } from './listings/listings.module';
 import { ScraperModule } from './scraper/scraper.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { AnalysisModule } from './analysis/analysis.module';
 import { Keyword } from './keywords/keyword.entity';
 import { Listing } from './listings/listing.entity';
 import { KeywordListing } from './listings/keyword-listing.entity';
 import { PriceHistory } from './listings/price-history.entity';
 import { NotificationLog } from './notifications/notification-log.entity';
+import { DealAnalysis } from './analysis/deal-analysis.entity';
+import { ModelMarketAvg } from './analysis/model-market-avg.entity';
 
 @Module({
   imports: [
@@ -24,7 +27,7 @@ import { NotificationLog } from './notifications/notification-log.entity';
         database: cfg.get('DB_NAME', 'vinbot'),
         username: cfg.get('DB_USER', 'postgres'),
         password: cfg.get('DB_PASSWORD', 'changeme'),
-        entities: [Keyword, Listing, KeywordListing, PriceHistory, NotificationLog],
+        entities: [Keyword, Listing, KeywordListing, PriceHistory, NotificationLog, DealAnalysis, ModelMarketAvg],
         synchronize: false,
         logging: false,
       }),
@@ -33,6 +36,7 @@ import { NotificationLog } from './notifications/notification-log.entity';
     ListingsModule,
     ScraperModule,
     NotificationsModule,
+    AnalysisModule,
   ],
 })
 export class AppModule {}
