@@ -4,7 +4,7 @@ import { ListingsService } from '../listings/listings.service';
 import { TelegramService } from '../notifications/telegram.service';
 import { DealsGateway } from '../notifications/deals.gateway';
 import { MistralService } from '../analysis/mistral.service';
-import { VintedClient } from './vinted.client';
+import { VintedClientPool } from './vinted.client';
 import { Keyword } from '../keywords/keyword.entity';
 import { Listing } from '../listings/listing.entity';
 import { AsyncQueue } from '../analysis/async-queue';
@@ -12,7 +12,6 @@ import { AsyncQueue } from '../analysis/async-queue';
 const FAST_TICK_MS = 30_000;
 const MARKET_TICK_MS = 600_000;
 
-/** Retourne un entier aléatoire entre min et max (inclus) */
 function randInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
@@ -37,7 +36,7 @@ interface AnalysisQueueItem {
 @Injectable()
 export class ScraperService implements OnModuleInit {
   private readonly logger = new Logger(ScraperService.name);
-  private readonly vintedClient = new VintedClient();
+  private readonly clientPool = new VintedClientPool();
   private isFastRunning = false;
   private isMarketRunning = false;
   private lastRunAt: Map<number, number> = new Map();
@@ -80,21 +79,19 @@ export class ScraperService implements OnModuleInit {
   async fastTick() {
     if (this.isFastRunning) return;
     this.isFastRunning = true;
-    try {
-      await this.runFastScan();
-    } finally {
-      this.isFastRunning = false;
-    }
+    try { await this.runFastScan(); } finally { this.isFastRunning = false; }
   }
 
   async marketTick() {
     if (this.isMarketRunning) return;
     this.isMarketRunning = true;
-    try {
-      await this.runMarketScan();
-    } finally {
-      this.isMarketRunning = false;
-    }
+    try { await this.runMarketScan(); } finally { this.isMarketRunning = false; }
+  }
+
+  private getCountryCodes(keyword: Keyword): string[] {
+    return Array.isArray(keyword.country_codes)
+      ? keyword.country_codes
+      : String(keyword.country_codes ?? 'fr').split(',').map(s => s.trim()).filter(Boolean);
   }
 
   private async runFastScan(): Promise<void> {
@@ -102,42 +99,49 @@ export class ScraperService implements OnModuleInit {
     if (keywords.length === 0) return;
 
     for (const keyword of keywords) {
-      try {
-        const items = await this.vintedClient.search(
-          keyword.search_text, keyword.min_price, keyword.max_price, 96, 1, keyword.catalog_id,
-        );
-        if (items.length === 0) continue;
+      const countryCodes = this.getCountryCodes(keyword);
+      for (const countryCode of countryCodes) {
+        try {
+          const client = this.clientPool.getClient(countryCode);
+          const items = await client.search(
+            keyword.search_text, keyword.min_price, keyword.max_price, 96, 1, keyword.catalog_id,
+          );
+          if (items.length === 0) continue;
 
-        let newCount = 0;
-        for (const item of items) {
-          const { listing, isNew, priceChanged } = await this.listingsService.upsertListing(item, keyword);
-          if (!isNew && !priceChanged) continue;
-          newCount++;
+          let newCount = 0;
+          for (const item of items) {
+            const { listing, isNew, priceChanged } = await this.listingsService.upsertListing(item, keyword, countryCode);
+            if (!isNew && !priceChanged) continue;
+            newCount++;
 
-          if (isNew && this.mistralService.isEnabled()) {
-            this.modelQueue.push({
-              listingId: listing.id,
-              title: listing.title ?? item.title,
-              price: parseFloat(String(listing.price ?? item.price)),
-              keywordId: keyword.id,
-              shippingEstimate: parseFloat(String(keyword.shipping_estimate)) || 4,
-              targetMargin: parseFloat(String(keyword.target_margin)) || 10,
-              keyword,
-            }).catch(() => {});
-          } else if (isNew || priceChanged) {
-            await this.maybeAlertClassic(listing, keyword);
+            if (isNew && this.mistralService.isEnabled()) {
+              this.modelQueue.push({
+                listingId: listing.id,
+                title: listing.title ?? item.title,
+                price: parseFloat(String(listing.price ?? item.price)),
+                keywordId: keyword.id,
+                shippingEstimate: parseFloat(String(keyword.shipping_estimate)) || 4,
+                targetMargin: parseFloat(String(keyword.target_margin)) || 10,
+                keyword,
+              }).catch(() => {});
+            } else if (isNew || priceChanged) {
+              await this.maybeAlertClassic(listing, keyword);
+            }
+          }
+
+          this.lastRunAt.set(keyword.id, Date.now());
+          this.lastScrapeTime = new Date();
+          this.logger.log(`[FastScan] "${keyword.search_text}" [${countryCode}] → ${items.length} annonces, ${newCount} nouvelles/modifiées`);
+        } catch (err: any) {
+          if (err.message === 'BANNED') {
+            this.logger.warn(`[FastScan] Keyword #${keyword.id} [${countryCode}] bloqué — pause 60s`);
+            await this.delay(60_000);
+          } else {
+            this.logger.error(`[FastScan] Keyword #${keyword.id} [${countryCode}]: ${err.message}`);
           }
         }
-
-        this.lastRunAt.set(keyword.id, Date.now());
-        this.lastScrapeTime = new Date();
-        this.logger.log(`[FastScan] "${keyword.search_text}" → ${items.length} annonces, ${newCount} nouvelles/modifiées`);
-      } catch (err: any) {
-        if (err.message === 'BANNED') {
-          this.logger.warn(`[FastScan] Keyword #${keyword.id} bloqué — pause 60s`);
-          await this.delay(60_000);
-        } else {
-          this.logger.error(`[FastScan] Keyword #${keyword.id}: ${err.message}`);
+        if (countryCodes.indexOf(countryCode) < countryCodes.length - 1) {
+          await this.delay(randInt(2_000, 4_000));
         }
       }
       if (keywords.indexOf(keyword) < keywords.length - 1) {
@@ -150,15 +154,18 @@ export class ScraperService implements OnModuleInit {
     if (!this.mistralService.isEnabled()) return;
     const keywords = await this.keywordsService.findActive();
     for (const keyword of keywords) {
-      const pages = keyword.market_scan_pages ?? 5;
+      const countryCodes = this.getCountryCodes(keyword);
+      const primaryCountry = countryCodes[0] ?? 'fr';
+      const client = this.clientPool.getClient(primaryCountry);
+      const pages = (keyword as any).market_scan_pages ?? 5;
       for (let page = 2; page <= pages; page++) {
         try {
-          const items = await this.vintedClient.search(
+          const items = await client.search(
             keyword.search_text, keyword.min_price, keyword.max_price, 96, page, keyword.catalog_id,
           );
           if (items.length === 0) break;
           for (const item of items) {
-            const { listing, isNew } = await this.listingsService.upsertListing(item, keyword);
+            const { listing, isNew } = await this.listingsService.upsertListing(item, keyword, primaryCountry);
             if (isNew && item.title) {
               this.modelQueue.push({
                 listingId: listing.id,
@@ -268,6 +275,7 @@ export class ScraperService implements OnModuleInit {
       keywords: keywords.map(kw => ({
         id: kw.id,
         label: kw.label,
+        countryCodes: this.getCountryCodes(kw),
         lastRunAt: this.lastRunAt.get(kw.id) ? new Date(this.lastRunAt.get(kw.id)!) : null,
         nextRunInSeconds: 0,
       })),
@@ -275,12 +283,9 @@ export class ScraperService implements OnModuleInit {
   }
 
   async backfillMistral(limit = 200): Promise<{ queued: number; skipped: number }> {
-    if (!this.mistralService.isEnabled()) {
-      return { queued: 0, skipped: 0 };
-    }
+    if (!this.mistralService.isEnabled()) return { queued: 0, skipped: 0 };
     const items = await this.listingsService.getListingsWithoutModel(limit);
-    let queued = 0;
-    let skipped = 0;
+    let queued = 0; let skipped = 0;
     for (const { listing, keywordId, shippingEstimate, targetMargin } of items) {
       const keyword = (await this.keywordsService.findActive()).find(k => k.id === keywordId);
       if (!keyword) { skipped++; continue; }
@@ -304,13 +309,15 @@ export class ScraperService implements OnModuleInit {
     const keywords = keywordId ? allKeywords.filter(kw => kw.id === keywordId) : allKeywords;
     const results: { keyword: string; pages: number; inserted: number }[] = [];
     for (const keyword of keywords) {
+      const primaryCountry = this.getCountryCodes(keyword)[0] ?? 'fr';
+      const client = this.clientPool.getClient(primaryCountry);
       let inserted = 0; let completedPages = 0;
       for (let page = 1; page <= pages; page++) {
         try {
-          const items = await this.vintedClient.search(keyword.search_text, keyword.min_price, keyword.max_price, 96, page, keyword.catalog_id);
+          const items = await client.search(keyword.search_text, keyword.min_price, keyword.max_price, 96, page, keyword.catalog_id);
           if (items.length === 0) break;
           for (const item of items) {
-            const { isNew } = await this.listingsService.upsertListing(item, keyword);
+            const { isNew } = await this.listingsService.upsertListing(item, keyword, primaryCountry);
             if (isNew) inserted++;
           }
           completedPages++;

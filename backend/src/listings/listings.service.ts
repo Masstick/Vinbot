@@ -33,12 +33,14 @@ export class ListingsService {
   ) {}
 
   async computeMarketAvg(keywordId: number, modelLabel?: string | null): Promise<MarketAvgResult> {
+    // Model-specific avg: use as soon as we have any data point
     if (modelLabel) {
       const mma = await this.modelAvgRepo.findOneBy({ keyword_id: keywordId, model_label: modelLabel });
-      if (mma && mma.item_count >= 3 && mma.avg_price) {
+      if (mma && mma.avg_price) {
         return { avg: parseFloat(String(mma.avg_price)), itemCount: mma.item_count, source: 'model' };
       }
     }
+    // Fallback: P15-P85 trimmed mean across recent keyword listings
     const rows = await this.listingRepo
       .createQueryBuilder('l')
       .innerJoin('keyword_listings', 'kl', 'kl.listing_id = l.id AND kl.keyword_id = :kid', { kid: keywordId })
@@ -48,15 +50,14 @@ export class ListingsService {
       .limit(200)
       .getRawMany<{ price: string }>();
     if (rows.length < 2) return { avg: null, itemCount: rows.length, source: 'keyword' };
-    const prices = rows.map(r => parseFloat(r.price)).sort((a, b) => a - b);
-    const median = prices[Math.floor(prices.length / 2)];
-    const filtered = prices.filter(p => p <= median * 5 && p > 0.5);
-    if (filtered.length === 0) return { avg: null, itemCount: 0, source: 'keyword' };
-    const start = Math.floor(filtered.length * 0.1);
-    const end = filtered.length - start;
-    const mid = filtered.slice(start, end || 1);
-    const avg = mid.reduce((a, b) => a + b, 0) / mid.length;
-    return { avg, itemCount: mid.length, source: 'keyword' };
+    const prices = rows.map(r => parseFloat(r.price)).filter(p => p > 0.5).sort((a, b) => a - b);
+    if (prices.length === 0) return { avg: null, itemCount: 0, source: 'keyword' };
+    const startIdx = Math.floor(prices.length * 0.15);
+    const endIdx = prices.length - startIdx;
+    const trimmed = prices.slice(startIdx, endIdx || 1);
+    if (trimmed.length === 0) return { avg: null, itemCount: 0, source: 'keyword' };
+    const avg = trimmed.reduce((a, b) => a + b, 0) / trimmed.length;
+    return { avg, itemCount: trimmed.length, source: 'keyword' };
   }
 
   async updateModelMarketAvg(keywordId: number, modelLabel: string, price: number): Promise<void> {
@@ -120,24 +121,22 @@ export class ListingsService {
     const results: Array<{ listing: Listing; keywordId: number; shippingEstimate: number; targetMargin: number }> = [];
     for (const row of rows) {
       const listing = await this.listingRepo.findOneBy({ id: row.id });
-      if (listing) {
-        results.push({
-          listing,
-          keywordId: row.keyword_id,
-          shippingEstimate: parseFloat(String(row.shipping_estimate)) || 4,
-          targetMargin: parseFloat(String(row.target_margin)) || 10,
-        });
-      }
+      if (listing) results.push({ listing, keywordId: row.keyword_id, shippingEstimate: parseFloat(String(row.shipping_estimate)) || 4, targetMargin: parseFloat(String(row.target_margin)) || 10 });
     }
     return results;
   }
 
-  async upsertListing(item: VintedItem, keyword: Keyword): Promise<{ listing: Listing; isNew: boolean; priceChanged: boolean }> {
+  async upsertListing(item: VintedItem, keyword: Keyword, countryCode?: string): Promise<{ listing: Listing; isNew: boolean; priceChanged: boolean }> {
     const existing = await this.listingRepo.findOneBy({ vinted_id: item.vinted_id });
     let isNew = false; let priceChanged = false; let listing: Listing;
     if (!existing) {
       isNew = true;
-      listing = this.listingRepo.create({ vinted_id: item.vinted_id, title: item.title, price: item.price, url: item.url, photo_url: item.photo_url, brand: item.brand, size_label: item.size_label, condition_label: item.condition_label, seller_name: item.seller_name, seller_id: item.seller_id, last_seen_at: new Date() });
+      listing = this.listingRepo.create({
+        vinted_id: item.vinted_id, title: item.title, price: item.price, url: item.url,
+        photo_url: item.photo_url, brand: item.brand, size_label: item.size_label,
+        condition_label: item.condition_label, seller_name: item.seller_name,
+        seller_id: item.seller_id, country_code: countryCode ?? 'fr', last_seen_at: new Date(),
+      });
       listing = await this.listingRepo.save(listing);
       await this.historyRepo.save({ listing_id: listing.id, price: item.price });
     } else {
@@ -167,7 +166,8 @@ export class ListingsService {
         kl.model_market_avg, kl.potential_profit, kl.matched_at,
         l.id AS id, l.title, l.price, l.url, l.photo_url, l.brand,
         l.condition_label, l.size_label, l.seller_name, l.first_seen_at,
-        l.model_label, l.model_confidence,
+        l.model_label, l.model_confidence, l.country_code,
+        EXTRACT(EPOCH FROM (NOW() - l.first_seen_at)) / 3600 AS freshness_hours,
         k.label AS keyword_label, k.target_margin, k.shipping_estimate,
         da.id AS analysis_id, da.scam_risk, da.confidence AS analysis_confidence,
         da.recommendation, da.reasoning, da.analyzed_at
@@ -189,9 +189,20 @@ export class ListingsService {
   }
 
   async getListings(keywordId?: number, limit = 100): Promise<any[]> {
-    const qb = this.klRepo.createQueryBuilder('kl').innerJoinAndSelect('kl.listing', 'l').innerJoinAndSelect('kl.keyword', 'k').orderBy('kl.matched_at', 'DESC').limit(limit);
-    if (keywordId) qb.andWhere('kl.keyword_id = :kid', { kid: keywordId });
-    return qb.getMany();
+    let sql = `
+      SELECT l.*, kl.deal_score, kl.market_avg, kl.model_market_avg, kl.potential_profit, kl.matched_at,
+        k.label AS keyword_label, k.id AS keyword_id,
+        EXTRACT(EPOCH FROM (NOW() - l.first_seen_at)) / 3600 AS freshness_hours,
+        da.recommendation, da.scam_risk, da.reasoning
+      FROM keyword_listings kl
+      INNER JOIN listings l ON l.id = kl.listing_id
+      INNER JOIN keywords k ON k.id = kl.keyword_id
+      LEFT JOIN deal_analyses da ON da.id = kl.analysis_id
+    `;
+    const params: any[] = [];
+    if (keywordId) { params.push(keywordId); sql += ` WHERE kl.keyword_id = $${params.length}`; }
+    sql += ` ORDER BY kl.matched_at DESC LIMIT ${limit}`;
+    return this.dataSource.query(sql, params);
   }
 
   async getPriceHistory(listingId: number): Promise<PriceHistory[]> {
@@ -199,8 +210,12 @@ export class ListingsService {
   }
 
   async getListing(id: number): Promise<any> {
-    const listing = await this.listingRepo.findOneBy({ id });
-    if (!listing) return null;
+    const rows = await this.dataSource.query(
+      `SELECT l.*, EXTRACT(EPOCH FROM (NOW() - l.first_seen_at)) / 3600 AS freshness_hours FROM listings l WHERE l.id = $1`,
+      [id],
+    );
+    if (!rows.length) return null;
+    const listing = rows[0];
     const kls = await this.klRepo.find({ where: { listing_id: id }, relations: ['keyword'] });
     const history = await this.getPriceHistory(id);
     const analysis = await this.analysisRepo.findOneBy({ listing_id: id });

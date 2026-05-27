@@ -29,6 +29,9 @@ export class Keyword {
   @Column({ type: 'int', nullable: true })
   catalog_id: number | null;
 
+  @Column({ type: 'simple-array', default: 'fr' })
+  country_codes: string[];
+
   @Column({ default: 120 })
   scan_interval_seconds: number;
 
