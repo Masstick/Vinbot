@@ -274,6 +274,31 @@ export class ScraperService implements OnModuleInit {
     };
   }
 
+  async backfillMistral(limit = 200): Promise<{ queued: number; skipped: number }> {
+    if (!this.mistralService.isEnabled()) {
+      return { queued: 0, skipped: 0 };
+    }
+    const items = await this.listingsService.getListingsWithoutModel(limit);
+    let queued = 0;
+    let skipped = 0;
+    for (const { listing, keywordId, shippingEstimate, targetMargin } of items) {
+      const keyword = (await this.keywordsService.findActive()).find(k => k.id === keywordId);
+      if (!keyword) { skipped++; continue; }
+      this.modelQueue.push({
+        listingId: listing.id,
+        title: listing.title ?? '',
+        price: parseFloat(String(listing.price ?? 0)),
+        keywordId,
+        shippingEstimate,
+        targetMargin,
+        keyword,
+      }).catch(() => {});
+      queued++;
+    }
+    this.logger.log(`[BackfillMistral] ${queued} listings en queue, ${skipped} ignorés`);
+    return { queued, skipped };
+  }
+
   async backfill(keywordId?: number, pages = 20) {
     const allKeywords = await this.keywordsService.findActive();
     const keywords = keywordId ? allKeywords.filter(kw => kw.id === keywordId) : allKeywords;

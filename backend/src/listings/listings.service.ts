@@ -106,6 +106,32 @@ export class ListingsService {
     return this.listingRepo.findOneBy({ id: listingId });
   }
 
+  async getListingsWithoutModel(limit = 200): Promise<Array<{ listing: Listing; keywordId: number; shippingEstimate: number; targetMargin: number }>> {
+    const rows = await this.dataSource.query<Array<{ id: number; keyword_id: number; shipping_estimate: string; target_margin: string }>>(
+      `SELECT DISTINCT ON (l.id) l.id, kl.keyword_id, k.shipping_estimate, k.target_margin
+       FROM listings l
+       INNER JOIN keyword_listings kl ON kl.listing_id = l.id
+       INNER JOIN keywords k ON k.id = kl.keyword_id
+       WHERE l.model_label IS NULL AND l.title IS NOT NULL
+       ORDER BY l.id DESC
+       LIMIT $1`,
+      [limit],
+    );
+    const results: Array<{ listing: Listing; keywordId: number; shippingEstimate: number; targetMargin: number }> = [];
+    for (const row of rows) {
+      const listing = await this.listingRepo.findOneBy({ id: row.id });
+      if (listing) {
+        results.push({
+          listing,
+          keywordId: row.keyword_id,
+          shippingEstimate: parseFloat(String(row.shipping_estimate)) || 4,
+          targetMargin: parseFloat(String(row.target_margin)) || 10,
+        });
+      }
+    }
+    return results;
+  }
+
   async upsertListing(item: VintedItem, keyword: Keyword): Promise<{ listing: Listing; isNew: boolean; priceChanged: boolean }> {
     const existing = await this.listingRepo.findOneBy({ vinted_id: item.vinted_id });
     let isNew = false; let priceChanged = false; let listing: Listing;
