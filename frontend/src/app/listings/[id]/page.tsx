@@ -126,7 +126,7 @@ export default function ListingDetailPage() {
             {/* Core Specs Details */}
             <div className="p-5 space-y-4">
               <div className="flex justify-between items-baseline">
-                <span className="text-3xl font-black text-white">{listing.price?.toFixed(1)}€</span>
+                <span className="text-3xl font-black text-white">{parseFloat(String(listing.price ?? 0)).toFixed(1)}€</span>
                 {marketAvg && (
                   <span className="text-sm text-zinc-500">
                     Moyenne estimée : <strong className="text-zinc-300 font-semibold">{marketAvg.toFixed(0)}€</strong>
