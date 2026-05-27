@@ -99,4 +99,7 @@ export const api = {
   scraper: {
     status: () => req<any>('/scraper/status'),
   },
+  mistral: {
+    test: () => req<{ ok: boolean; error?: string }>('/mistral/test', { method: 'POST' }),
+  },
 };
