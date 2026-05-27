@@ -53,7 +53,7 @@ export class ScraperService implements OnModuleInit {
     private readonly dealsGateway: DealsGateway,
     private readonly mistralService: MistralService,
   ) {
-    this.modelQueue = new AsyncQueue(this.processModelExtraction.bind(this), 3, 5);
+    this.modelQueue = new AsyncQueue(this.processModelExtraction.bind(this), 1, 1);
     this.analysisQueue = new AsyncQueue(this.processDealAnalysis.bind(this), 1, 3);
   }
 

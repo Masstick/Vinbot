@@ -59,6 +59,11 @@ export class MistralService implements OnModuleInit {
       });
       return this.parseExtractResponse(res.data.choices[0].message.content);
     } catch (err: any) {
+      if (err.response?.status === 429) {
+        this.logger.warn('Mistral rate limit (429) sur extractModel — retry dans 15s');
+        await new Promise(r => setTimeout(r, 15_000));
+        return this.extractModel(title, price);
+      }
       this.logger.warn(`extractModel failed: ${err.message}`);
       return { model_label: null, confidence: 0 };
     }
