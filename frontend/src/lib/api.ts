@@ -23,6 +23,8 @@ export interface Keyword {
   active: boolean;
   created_at: string;
   updated_at: string;
+  /** ISO country codes to scan, e.g. ["fr", "be", "es"] */
+  country_codes?: string[];
 }
 
 export interface Listing {
@@ -38,6 +40,12 @@ export interface Listing {
   seller_name: string | null;
   first_seen_at: string;
   last_seen_at: string;
+  /** Derived server-side or computed client-side from first_seen_at */
+  freshness_hours?: number;
+  /** ISO country code of the seller's country, e.g. "fr", "be", "es" */
+  country_code?: string;
+  /** Short reasoning text from AI deal analysis (deal_analyses join) */
+  reasoning?: string;
 }
 
 export interface KeywordListing {
@@ -49,6 +57,12 @@ export interface KeywordListing {
   matched_at: string;
   keyword: Keyword;
   listing: Listing;
+  /** Confidence score from AI analysis (0–1) */
+  analysis_confidence?: number;
+  /** AI recommendation: "buy" | "watch" | "skip" */
+  recommendation?: string;
+  /** AI scam risk assessment: "low" | "medium" | "high" */
+  scam_risk?: string;
 }
 
 export interface PricePoint {
@@ -74,6 +88,7 @@ export const api = {
   listings: {
     list: (keywordId?: number) => req<KeywordListing[]>(`/listings${keywordId ? `?keyword_id=${keywordId}` : ''}`),
     opportunities: (keywordId?: number) => req<KeywordListing[]>(`/listings/opportunities${keywordId ? `?keyword_id=${keywordId}` : ''}`),
+    validated: () => req<KeywordListing[]>('/listings/opportunities'),
     get: (id: number) => req<any>(`/listings/${id}`),
     history: (id: number) => req<PricePoint[]>(`/listings/${id}/history`),
     stats: () => req<Stats>('/listings/stats'),

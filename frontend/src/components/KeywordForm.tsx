@@ -1,7 +1,19 @@
 'use client';
 import { useState } from 'react';
 import { Keyword, api } from '@/lib/api';
-import { Plus, Check, AlertCircle, HelpCircle } from 'lucide-react';
+import { Check, AlertCircle, HelpCircle, Globe } from 'lucide-react';
+
+const AVAILABLE_COUNTRIES: { code: string; label: string; flag: string }[] = [
+  { code: 'fr', label: 'France', flag: '🇫🇷' },
+  { code: 'be', label: 'Belgique', flag: '🇧🇪' },
+  { code: 'es', label: 'Espagne', flag: '🇪🇸' },
+  { code: 'pl', label: 'Pologne', flag: '🇵🇱' },
+  { code: 'de', label: 'Allemagne', flag: '🇩🇪' },
+  { code: 'nl', label: 'Pays-Bas', flag: '🇳🇱' },
+  { code: 'it', label: 'Italie', flag: '🇮🇹' },
+  { code: 'pt', label: 'Portugal', flag: '🇵🇹' },
+  { code: 'se', label: 'Suède', flag: '🇸🇪' },
+];
 
 interface Props {
   initial?: Partial<Keyword>;
@@ -21,6 +33,7 @@ export function KeywordForm({ initial, onSaved, onCancel }: Props) {
     catalog_id: initial?.catalog_id ?? '',
     scan_interval_seconds: initial?.scan_interval_seconds ?? 120,
     active: initial?.active ?? true,
+    country_codes: initial?.country_codes ?? ['fr'],
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -41,6 +54,7 @@ export function KeywordForm({ initial, onSaved, onCancel }: Props) {
         scan_interval_seconds: Number(form.scan_interval_seconds),
         category: form.category || null,
         catalog_id: form.catalog_id === '' ? null : Number(form.catalog_id),
+        country_codes: form.country_codes.length > 0 ? form.country_codes : ['fr'],
       };
       const kw = initial?.id
         ? await api.keywords.update(initial.id, payload)
@@ -213,6 +227,48 @@ export function KeywordForm({ initial, onSaved, onCancel }: Props) {
             </span>
           </label>
         </div>
+      </div>
+
+      {/* Country codes */}
+      <div>
+        <label className={labelClass}>
+          <Globe size={12} />
+          Pays à scanner
+        </label>
+        <div className="flex flex-wrap gap-2 mt-1">
+          {AVAILABLE_COUNTRIES.map(country => {
+            const selected = form.country_codes.includes(country.code);
+            return (
+              <button
+                key={country.code}
+                type="button"
+                onClick={() => {
+                  const current = form.country_codes as string[];
+                  if (selected) {
+                    // Keep at least one country selected
+                    if (current.length > 1) {
+                      set('country_codes', current.filter(c => c !== country.code));
+                    }
+                  } else {
+                    set('country_codes', [...current, country.code]);
+                  }
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+                  selected
+                    ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500/40 shadow-[inset_0_0_8px_rgba(99,102,241,0.1)]'
+                    : 'bg-zinc-900 text-zinc-500 border-zinc-800 hover:border-zinc-700 hover:text-zinc-300'
+                }`}
+              >
+                <span className="text-base leading-none">{country.flag}</span>
+                <span>{country.label}</span>
+                {selected && <Check size={11} className="text-indigo-400" />}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-[10px] text-zinc-600 mt-1.5">
+          Sélectionnez un ou plusieurs pays. Par défaut : France uniquement.
+        </p>
       </div>
 
       {error && (
