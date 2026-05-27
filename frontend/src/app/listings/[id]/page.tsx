@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { api, PricePoint } from '@/lib/api';
 import { PriceChart } from '@/components/PriceChart';
-import { ArrowLeft, ExternalLink, Calculator, DollarSign, Coins, TrendingDown, Tag, User, Calendar, Percent, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Calculator, DollarSign, Coins, TrendingDown, Tag, User, Calendar, Percent, ShieldCheck, Brain, AlertTriangle, Sparkles } from 'lucide-react';
 
 export default function ListingDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -312,6 +312,51 @@ export default function ListingDetailPage() {
         <h2 className="text-base font-bold text-white">Suivi de l'évolution du prix</h2>
         <PriceChart history={history} marketAvg={marketAvg} />
       </div>
+
+      {/* AI Analysis Block */}
+      {listing.analysis && (
+        <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-5 space-y-4 backdrop-blur-md">
+          <div className="flex items-center gap-2">
+            <Brain className="text-indigo-400" size={20} />
+            <h2 className="text-base font-bold text-white">Analyse Mistral</h2>
+            <span className="text-xs text-zinc-500 ml-auto">
+              {new Date(listing.analysis.analyzed_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3 text-center">
+            <div className="bg-zinc-950/50 border border-zinc-800 rounded-xl p-3">
+              <p className="text-xs text-zinc-500 mb-1">Recommandation</p>
+              {listing.analysis.recommendation === 'buy' ? (
+                <span className="text-emerald-400 font-bold text-sm">✅ Acheter</span>
+              ) : listing.analysis.recommendation === 'watch' ? (
+                <span className="text-amber-400 font-bold text-sm">👀 Surveiller</span>
+              ) : (
+                <span className="text-zinc-400 font-bold text-sm">❌ Passer</span>
+              )}
+            </div>
+            <div className="bg-zinc-950/50 border border-zinc-800 rounded-xl p-3">
+              <p className="text-xs text-zinc-500 mb-1">Confiance IA</p>
+              <span className={`font-bold text-sm ${listing.analysis.confidence && parseFloat(String(listing.analysis.confidence)) >= 0.8 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {listing.analysis.confidence ? `${Math.round(parseFloat(String(listing.analysis.confidence)) * 100)}%` : '—'}
+              </span>
+            </div>
+            <div className="bg-zinc-950/50 border border-zinc-800 rounded-xl p-3">
+              <p className="text-xs text-zinc-500 mb-1">Risque scam</p>
+              <span className={`font-bold text-sm ${listing.analysis.scam_risk === 'low' ? 'text-emerald-400' : listing.analysis.scam_risk === 'medium' ? 'text-amber-400' : 'text-rose-400'}`}>
+                {listing.analysis.scam_risk === 'low' ? '🟢 Faible' : listing.analysis.scam_risk === 'medium' ? '🟡 Modéré' : '🔴 Élevé'}
+              </span>
+            </div>
+          </div>
+
+          {listing.analysis.reasoning && (
+            <div className="bg-zinc-950/40 border border-zinc-800/60 rounded-xl p-4 text-xs text-zinc-300 leading-relaxed italic">
+              <Sparkles size={12} className="inline text-indigo-400 mr-1" />
+              {listing.analysis.reasoning}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
