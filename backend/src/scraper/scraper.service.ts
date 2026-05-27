@@ -1,5 +1,4 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { Interval } from '@nestjs/schedule';
 import { KeywordsService } from '../keywords/keywords.service';
 import { ListingsService } from '../listings/listings.service';
 import { TelegramService } from '../notifications/telegram.service';
@@ -10,9 +9,13 @@ import { Keyword } from '../keywords/keyword.entity';
 import { Listing } from '../listings/listing.entity';
 import { AsyncQueue } from '../analysis/async-queue';
 
-const BETWEEN_KEYWORDS_DELAY_MS = 5000;
 const FAST_TICK_MS = 30_000;
 const MARKET_TICK_MS = 600_000;
+
+/** Retourne un entier aléatoire entre min et max (inclus) */
+function randInt(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
 
 interface ModelQueueItem {
   listingId: number;
@@ -56,10 +59,24 @@ export class ScraperService implements OnModuleInit {
 
   onModuleInit() {
     this.logger.log('ScraperService initialisé — premier fast scan dans 5s');
-    setTimeout(() => this.fastTick(), 5000);
+    setTimeout(() => this.scheduleFastTick(), 5000);
+    setTimeout(() => this.scheduleMarketTick(), MARKET_TICK_MS);
   }
 
-  @Interval(FAST_TICK_MS)
+  private scheduleFastTick(): void {
+    this.fastTick().finally(() => {
+      const next = randInt(25_000, 35_000);
+      setTimeout(() => this.scheduleFastTick(), next);
+    });
+  }
+
+  private scheduleMarketTick(): void {
+    this.marketTick().finally(() => {
+      const next = randInt(540_000, 660_000);
+      setTimeout(() => this.scheduleMarketTick(), next);
+    });
+  }
+
   async fastTick() {
     if (this.isFastRunning) return;
     this.isFastRunning = true;
@@ -70,7 +87,6 @@ export class ScraperService implements OnModuleInit {
     }
   }
 
-  @Interval(MARKET_TICK_MS)
   async marketTick() {
     if (this.isMarketRunning) return;
     this.isMarketRunning = true;
@@ -125,7 +141,7 @@ export class ScraperService implements OnModuleInit {
         }
       }
       if (keywords.indexOf(keyword) < keywords.length - 1) {
-        await this.delay(BETWEEN_KEYWORDS_DELAY_MS);
+        await this.delay(randInt(3_000, 7_000));
       }
     }
   }
@@ -155,7 +171,7 @@ export class ScraperService implements OnModuleInit {
               }).catch(() => {});
             }
           }
-          await this.delay(3000);
+          await this.delay(randInt(2_000, 5_000));
         } catch (err: any) {
           if (err.message === 'BANNED') break;
           this.logger.error(`[MarketScan] Keyword #${keyword.id} page ${page}: ${err.message}`);
@@ -163,7 +179,7 @@ export class ScraperService implements OnModuleInit {
         }
       }
       this.logger.log(`[MarketScan] "${keyword.search_text}" pages 2-${pages} traités`);
-      if (keywords.indexOf(keyword) < keywords.length - 1) await this.delay(5000);
+      if (keywords.indexOf(keyword) < keywords.length - 1) await this.delay(randInt(4_000, 8_000));
     }
   }
 
