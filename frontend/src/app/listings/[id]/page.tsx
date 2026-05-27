@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { api, PricePoint } from '@/lib/api';
 import { PriceChart } from '@/components/PriceChart';
-import { ArrowLeft, ExternalLink, Calculator, DollarSign, Coins, TrendingDown, Tag, User, Calendar, Percent, ShieldCheck, Brain, AlertTriangle, Sparkles } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Calculator, TrendingDown, Tag, User, Calendar, Percent, ShieldCheck, Clock, Globe, Brain, AlertCircle } from 'lucide-react';
 
 export default function ListingDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -80,6 +80,35 @@ export default function ListingDetailPage() {
   const profit = kl?.potential_profit ? parseFloat(String(kl.potential_profit)) : null;
   const score = kl?.deal_score ? parseFloat(String(kl.deal_score)) : null;
 
+  // Freshness
+  const freshnessHours = listing.first_seen_at
+    ? (Date.now() - new Date(listing.first_seen_at).getTime()) / 3_600_000
+    : null;
+
+  function formatFreshness(hours: number): string {
+    if (hours < 1) return `Il y a ${Math.round(hours * 60)} min`;
+    if (hours < 24) return `Il y a ${Math.round(hours)}h`;
+    return `Il y a ${Math.round(hours / 24)} jour${Math.round(hours / 24) > 1 ? 's' : ''}`;
+  }
+
+  function scoreBarColor(s: number): string {
+    if (s >= 60) return 'bg-emerald-500';
+    if (s >= 30) return 'bg-amber-500';
+    return 'bg-rose-500';
+  }
+
+  const FLAGS: Record<string, string> = {
+    be: '🇧🇪', es: '🇪🇸', pl: '🇵🇱', de: '🇩🇪',
+    nl: '🇳🇱', it: '🇮🇹', pt: '🇵🇹', se: '🇸🇪',
+    gb: '🇬🇧', at: '🇦🇹', ch: '🇨🇭',
+  };
+
+  function scamRiskBadge(risk: string) {
+    if (risk === 'low') return { label: 'Risque faible', cls: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10', dot: '🟢' };
+    if (risk === 'medium') return { label: 'Risque moyen', cls: 'text-amber-400 border-amber-500/30 bg-amber-500/10', dot: '🟡' };
+    return { label: 'Risque élevé', cls: 'text-rose-400 border-rose-500/30 bg-rose-500/10', dot: '🔴' };
+  }
+
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       {/* Top back row */}
@@ -126,7 +155,7 @@ export default function ListingDetailPage() {
             {/* Core Specs Details */}
             <div className="p-5 space-y-4">
               <div className="flex justify-between items-baseline">
-                <span className="text-3xl font-black text-white">{parseFloat(String(listing.price ?? 0)).toFixed(1)}€</span>
+                <span className="text-3xl font-black text-white">{listing.price?.toFixed(1)}€</span>
                 {marketAvg && (
                   <span className="text-sm text-zinc-500">
                     Moyenne estimée : <strong className="text-zinc-300 font-semibold">{marketAvg.toFixed(0)}€</strong>
@@ -304,6 +333,132 @@ export default function ListingDetailPage() {
               </span>
             </div>
           </div>
+          {/* Deal Analysis Card */}
+          <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-6 space-y-5 backdrop-blur-md">
+            <div className="flex items-center gap-2 pb-1 border-b border-zinc-800/80">
+              <Brain className="text-indigo-400" size={18} />
+              <h2 className="text-base font-bold text-white">Analyse du deal</h2>
+            </div>
+
+            {/* Deal score + bar */}
+            {score !== null && (
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-zinc-400 font-medium flex items-center gap-1.5">
+                    <TrendingDown size={13} className="text-indigo-400" />
+                    Score de deal
+                  </span>
+                  <span className="font-black text-white">{score.toFixed(0)}%</span>
+                </div>
+                <div className="w-full bg-zinc-800 rounded-full h-4 overflow-hidden relative">
+                  <div
+                    className={`h-full rounded-full ${scoreBarColor(score)}`}
+                    style={{ width: `${Math.min(100, Math.max(0, score))}%` }}
+                  />
+                  <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white mix-blend-luminosity">
+                    {score.toFixed(0)}%
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              {/* Market avg */}
+              {marketAvg !== null && (
+                <div className="bg-zinc-950/50 rounded-xl p-3 border border-zinc-800/60 space-y-0.5">
+                  <p className="text-zinc-500 uppercase tracking-wider text-[10px] font-semibold">Moy. marché</p>
+                  <p className="text-base font-black text-zinc-100">{marketAvg.toFixed(0)}€</p>
+                </div>
+              )}
+
+              {/* Potential profit */}
+              {profit !== null && (
+                <div className="bg-zinc-950/50 rounded-xl p-3 border border-zinc-800/60 space-y-0.5">
+                  <p className="text-zinc-500 uppercase tracking-wider text-[10px] font-semibold">Profit estimé</p>
+                  <p className={`text-base font-black ${profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {profit >= 0 ? '+' : ''}{profit.toFixed(0)}€
+                  </p>
+                </div>
+              )}
+
+              {/* Freshness */}
+              {freshnessHours !== null && (
+                <div className="bg-zinc-950/50 rounded-xl p-3 border border-zinc-800/60 space-y-0.5">
+                  <p className="text-zinc-500 uppercase tracking-wider text-[10px] font-semibold flex items-center gap-1">
+                    <Clock size={10} /> Fraîcheur
+                  </p>
+                  <p className="text-sm font-bold text-zinc-100">{formatFreshness(freshnessHours)}</p>
+                </div>
+              )}
+
+              {/* Country */}
+              {listing.country_code && listing.country_code.toLowerCase() !== 'fr' && (
+                <div className="bg-zinc-950/50 rounded-xl p-3 border border-zinc-800/60 space-y-0.5">
+                  <p className="text-zinc-500 uppercase tracking-wider text-[10px] font-semibold flex items-center gap-1">
+                    <Globe size={10} /> Pays vendeur
+                  </p>
+                  <p className="text-sm font-bold text-zinc-100">
+                    {FLAGS[listing.country_code.toLowerCase()] ?? ''} {listing.country_code.toUpperCase()}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* AI analysis (if available) */}
+            {(kl?.recommendation || kl?.scam_risk || listing.reasoning) && (
+              <div className="space-y-3 pt-2 border-t border-zinc-800/60">
+                <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold flex items-center gap-1.5">
+                  <Brain size={10} className="text-indigo-400" />
+                  Analyse IA
+                </p>
+
+                <div className="flex flex-wrap gap-2">
+                  {kl?.recommendation && (
+                    <span
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${
+                        kl.recommendation === 'buy'
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                          : kl.recommendation === 'watch'
+                          ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                          : 'bg-zinc-800 text-zinc-400 border-zinc-700/40'
+                      }`}
+                    >
+                      {kl.recommendation === 'buy' ? '✅ Acheter' : kl.recommendation === 'watch' ? '👀 Surveiller' : kl.recommendation}
+                    </span>
+                  )}
+
+                  {kl?.scam_risk && (() => {
+                    const badge = scamRiskBadge(kl.scam_risk);
+                    return (
+                      <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${badge.cls}`}>
+                        {badge.dot} {badge.label}
+                      </span>
+                    );
+                  })()}
+
+                  {kl?.analysis_confidence !== undefined && (
+                    <span className="px-2.5 py-1 rounded-lg text-xs font-bold border bg-indigo-500/10 text-indigo-400 border-indigo-500/30">
+                      Confiance : {(kl.analysis_confidence * 100).toFixed(0)}%
+                    </span>
+                  )}
+                </div>
+
+                {listing.reasoning && (
+                  <p className="text-xs italic text-zinc-400 leading-relaxed bg-zinc-950/40 rounded-xl p-3 border border-zinc-800/60">
+                    {listing.reasoning}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Fallback if no AI data */}
+            {!kl?.recommendation && !kl?.scam_risk && !listing.reasoning && (
+              <div className="flex items-start gap-2 text-[11px] text-zinc-500 bg-zinc-950/20 p-3 rounded-xl border border-zinc-800/60">
+                <AlertCircle size={13} className="text-zinc-600 shrink-0 mt-0.5" />
+                <span>Aucune analyse IA disponible pour ce deal.</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -312,51 +467,6 @@ export default function ListingDetailPage() {
         <h2 className="text-base font-bold text-white">Suivi de l'évolution du prix</h2>
         <PriceChart history={history} marketAvg={marketAvg} />
       </div>
-
-      {/* AI Analysis Block */}
-      {listing.analysis && (
-        <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-5 space-y-4 backdrop-blur-md">
-          <div className="flex items-center gap-2">
-            <Brain className="text-indigo-400" size={20} />
-            <h2 className="text-base font-bold text-white">Analyse Mistral</h2>
-            <span className="text-xs text-zinc-500 ml-auto">
-              {new Date(listing.analysis.analyzed_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3 text-center">
-            <div className="bg-zinc-950/50 border border-zinc-800 rounded-xl p-3">
-              <p className="text-xs text-zinc-500 mb-1">Recommandation</p>
-              {listing.analysis.recommendation === 'buy' ? (
-                <span className="text-emerald-400 font-bold text-sm">✅ Acheter</span>
-              ) : listing.analysis.recommendation === 'watch' ? (
-                <span className="text-amber-400 font-bold text-sm">👀 Surveiller</span>
-              ) : (
-                <span className="text-zinc-400 font-bold text-sm">❌ Passer</span>
-              )}
-            </div>
-            <div className="bg-zinc-950/50 border border-zinc-800 rounded-xl p-3">
-              <p className="text-xs text-zinc-500 mb-1">Confiance IA</p>
-              <span className={`font-bold text-sm ${listing.analysis.confidence && parseFloat(String(listing.analysis.confidence)) >= 0.8 ? 'text-emerald-400' : 'text-amber-400'}`}>
-                {listing.analysis.confidence ? `${Math.round(parseFloat(String(listing.analysis.confidence)) * 100)}%` : '—'}
-              </span>
-            </div>
-            <div className="bg-zinc-950/50 border border-zinc-800 rounded-xl p-3">
-              <p className="text-xs text-zinc-500 mb-1">Risque scam</p>
-              <span className={`font-bold text-sm ${listing.analysis.scam_risk === 'low' ? 'text-emerald-400' : listing.analysis.scam_risk === 'medium' ? 'text-amber-400' : 'text-rose-400'}`}>
-                {listing.analysis.scam_risk === 'low' ? '🟢 Faible' : listing.analysis.scam_risk === 'medium' ? '🟡 Modéré' : '🔴 Élevé'}
-              </span>
-            </div>
-          </div>
-
-          {listing.analysis.reasoning && (
-            <div className="bg-zinc-950/40 border border-zinc-800/60 rounded-xl p-4 text-xs text-zinc-300 leading-relaxed italic">
-              <Sparkles size={12} className="inline text-indigo-400 mr-1" />
-              {listing.analysis.reasoning}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }

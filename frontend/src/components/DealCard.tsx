@@ -1,142 +1,305 @@
 'use client';
+import { useState } from 'react';
 import Link from 'next/link';
 import { KeywordListing } from '@/lib/api';
-import { ExternalLink, TrendingDown, ArrowUpRight, Tag, Sparkles, AlertTriangle, Clock } from 'lucide-react';
+import { ExternalLink, TrendingDown, ArrowUpRight, Clock } from 'lucide-react';
 
-function getScoreStyle(score: number | null) {
-  if (score === null) return 'bg-zinc-800 text-zinc-400 border-zinc-700/50';
-  if (score >= 40) return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 glow-emerald';
-  if (score >= 20) return 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30 glow-cyan';
-  return 'bg-amber-500/10 text-amber-400 border-amber-500/30';
+// ─── Freshness ────────────────────────────────────────────────────────────────
+
+function getFreshnessHours(listing: KeywordListing['listing']): number {
+  if (listing.freshness_hours !== undefined) return listing.freshness_hours;
+  const firstSeen = new Date(listing.first_seen_at).getTime();
+  return (Date.now() - firstSeen) / 3_600_000;
 }
 
-function getProfitStyle(profit: number | null) {
-  if (profit === null || profit < 0) return 'text-zinc-500';
-  if (profit >= 30) return 'text-emerald-400 font-extrabold';
-  if (profit >= 15) return 'text-cyan-400 font-bold';
-  return 'text-amber-400 font-semibold';
+interface FreshnessBadgeProps {
+  hours: number;
 }
 
-function isFresh(firstSeenAt: string): boolean {
-  return Date.now() - new Date(firstSeenAt).getTime() < 5 * 60 * 1000;
+function FreshnessBadge({ hours }: FreshnessBadgeProps) {
+  if (hours < 1) {
+    return (
+      <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+        <Clock size={10} />
+        &lt; 1h
+      </span>
+    );
+  }
+  if (hours < 6) {
+    return (
+      <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg bg-amber-500/15 text-amber-400 border border-amber-500/30">
+        <Clock size={10} />
+        &lt; 6h
+      </span>
+    );
+  }
+  if (hours < 24) {
+    return (
+      <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg bg-sky-500/15 text-sky-400 border border-sky-500/30">
+        <Clock size={10} />
+        &lt; 24h
+      </span>
+    );
+  }
+  return null;
 }
 
-interface Props { kl: KeywordListing; }
+// ─── Condition badge ──────────────────────────────────────────────────────────
+
+function ConditionBadge({ label }: { label: string }) {
+  const normalized = label.toLowerCase();
+  if (normalized.includes('neuf')) {
+    return (
+      <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded text-[10px] font-semibold">
+        {label}
+      </span>
+    );
+  }
+  if (normalized.includes('très bon') || normalized.includes('bon état')) {
+    return (
+      <span className="bg-sky-500/10 text-sky-400 border border-sky-500/20 px-2 py-0.5 rounded text-[10px] font-semibold">
+        {label}
+      </span>
+    );
+  }
+  if (normalized.includes('satisf')) {
+    return (
+      <span className="bg-zinc-700/60 text-zinc-400 border border-zinc-600/30 px-2 py-0.5 rounded text-[10px] font-semibold">
+        {label}
+      </span>
+    );
+  }
+  return (
+    <span className="bg-zinc-800/40 text-zinc-500 border border-zinc-800/50 px-2 py-0.5 rounded text-[10px] font-medium">
+      {label}
+    </span>
+  );
+}
+
+// ─── Score bar ────────────────────────────────────────────────────────────────
+
+function ScoreBar({ score }: { score: number }) {
+  const pct = Math.min(100, Math.max(0, score));
+  const color =
+    pct >= 60
+      ? 'bg-emerald-500'
+      : pct >= 30
+      ? 'bg-amber-500'
+      : 'bg-rose-500';
+
+  return (
+    <div className="w-full bg-zinc-800 rounded-full h-4 overflow-hidden relative">
+      <div
+        className={`h-full rounded-full transition-all ${color}`}
+        style={{ width: `${pct}%` }}
+      />
+      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white mix-blend-luminosity">
+        {pct.toFixed(0)}%
+      </span>
+    </div>
+  );
+}
+
+// ─── Country flag ─────────────────────────────────────────────────────────────
+
+const FLAGS: Record<string, string> = {
+  be: '🇧🇪',
+  es: '🇪🇸',
+  pl: '🇵🇱',
+  de: '🇩🇪',
+  nl: '🇳🇱',
+  it: '🇮🇹',
+  pt: '🇵🇹',
+  se: '🇸🇪',
+  gb: '🇬🇧',
+  at: '🇦🇹',
+  ch: '🇨🇭',
+};
+
+function countryFlag(code: string): string | null {
+  const c = code.toLowerCase();
+  if (c === 'fr') return null;
+  return FLAGS[c] ?? null;
+}
+
+// ─── Reasoning snippet ────────────────────────────────────────────────────────
+
+function ReasoningSnippet({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const truncated = text.length > 100;
+  const display = !truncated || expanded ? text : `${text.slice(0, 100)}…`;
+
+  return (
+    <p
+      className="text-[11px] italic text-zinc-400 leading-snug cursor-pointer"
+      onClick={() => setExpanded(e => !e)}
+      title={truncated ? (expanded ? 'Réduire' : 'Afficher tout') : undefined}
+    >
+      {display}
+      {truncated && (
+        <span className="ml-1 text-indigo-400 not-italic font-medium">
+          {expanded ? ' moins' : ' plus'}
+        </span>
+      )}
+    </p>
+  );
+}
+
+// ─── Main card ────────────────────────────────────────────────────────────────
+
+interface Props {
+  kl: KeywordListing;
+}
 
 export function DealCard({ kl }: Props) {
-  const { listing, keyword, deal_score, market_avg, model_market_avg, potential_profit, analysis } = kl;
+  const { listing, keyword, deal_score, market_avg, potential_profit } = kl;
   const price = listing.price ? parseFloat(String(listing.price)) : null;
-  const effectiveAvg = model_market_avg
-    ? parseFloat(String(model_market_avg))
-    : market_avg ? parseFloat(String(market_avg)) : null;
+  const avg = market_avg ? parseFloat(String(market_avg)) : null;
   const profit = potential_profit ? parseFloat(String(potential_profit)) : null;
   const score = deal_score ? parseFloat(String(deal_score)) : null;
-  const fresh = isFresh(listing.first_seen_at);
-  const aiConfidence = analysis?.confidence ? parseFloat(String(analysis.confidence)) : null;
+
+  const freshnessHours = getFreshnessHours(listing);
+  const flag = listing.country_code ? countryFlag(listing.country_code) : null;
 
   return (
     <div className="group bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden hover:border-zinc-700/80 hover:shadow-xl transition-all duration-300 hover:scale-[1.01] flex flex-col h-full">
-      {/* Image */}
-      <div className="relative aspect-[4/3] bg-zinc-950 overflow-hidden w-full shrink-0">
+      {/* Product Image */}
+      <div className="relative aspect-[3/2] bg-zinc-950 overflow-hidden w-full shrink-0">
         <Link href={`/listings/${listing.id}`}>
           {listing.photo_url ? (
-            <img src={listing.photo_url} alt={listing.title ?? ''} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            <img
+              src={listing.photo_url}
+              alt={listing.title ?? ''}
+              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+              onError={e => {
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-zinc-600 text-xs">Aucune image</div>
+            <div className="w-full h-full flex items-center justify-center text-zinc-600 text-xs">
+              Aucune image
+            </div>
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-transparent to-transparent opacity-60" />
         </Link>
 
+        {/* Deal Score badge (top right) */}
         {score !== null && (
-          <span className={`absolute top-2.5 right-2.5 flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg border backdrop-blur-md ${getScoreStyle(score)}`}>
-            <TrendingDown size={12} />-{score.toFixed(0)}%
+          <span
+            className={`absolute top-2.5 right-2.5 flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg border backdrop-blur-md ${
+              score >= 40
+                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                : score >= 20
+                ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30'
+                : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+            }`}
+          >
+            <TrendingDown size={12} />
+            -{score.toFixed(0)}%
           </span>
         )}
 
-        {fresh && (
-          <span className="absolute top-2.5 left-2.5 flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg border backdrop-blur-md bg-indigo-500/20 text-indigo-300 border-indigo-500/40">
-            <Clock size={10} />🆕 NOUVEAU
-          </span>
-        )}
+        {/* Freshness badge (top left) */}
+        <span className="absolute top-2.5 left-2.5 backdrop-blur-md">
+          <FreshnessBadge hours={freshnessHours} />
+        </span>
 
+        {/* Keyword label overlay (bottom left) */}
         <span className="absolute bottom-2 left-2 text-[10px] font-medium tracking-wide uppercase px-2 py-0.5 rounded bg-zinc-950/80 text-zinc-400 border border-zinc-800/80 backdrop-blur-md">
           {keyword.label}
         </span>
       </div>
 
-      {/* Content */}
+      {/* Product Details */}
       <div className="p-4 flex-1 flex flex-col justify-between gap-3">
         <div className="space-y-2">
+          {/* Brand / Size / Condition badges */}
           <div className="flex flex-wrap gap-1">
-            {listing.brand && <span className="bg-zinc-800/60 text-zinc-300 px-2 py-0.5 rounded text-[10px] font-medium border border-zinc-700/30">{listing.brand}</span>}
-            {listing.condition_label && <span className="bg-zinc-800/40 text-zinc-400 px-2 py-0.5 rounded text-[10px] font-medium border border-zinc-800/50">{listing.condition_label}</span>}
+            {listing.brand && (
+              <span className="bg-zinc-800/60 text-zinc-300 px-2 py-0.5 rounded text-[10px] font-medium border border-zinc-700/30">
+                {listing.brand}
+              </span>
+            )}
+            {listing.size_label && (
+              <span className="bg-zinc-800/60 text-zinc-300 px-2 py-0.5 rounded text-[10px] font-medium border border-zinc-700/30">
+                Taille : {listing.size_label}
+              </span>
+            )}
+            {listing.condition_label && (
+              <ConditionBadge label={listing.condition_label} />
+            )}
           </div>
 
-          {listing.model_label && (
-            <div className="flex items-center gap-1 text-[10px] text-indigo-400">
-              <Sparkles size={10} />
-              <span className="font-mono font-semibold">{listing.model_label}</span>
-            </div>
-          )}
-
-          <Link href={`/listings/${listing.id}`} className="block text-sm font-semibold text-zinc-100 hover:text-indigo-400 transition-colors line-clamp-1 mt-1">
-            {listing.title ?? 'Sans titre'}
+          {/* Title + optional country flag */}
+          <Link
+            href={`/listings/${listing.id}`}
+            className="flex items-center gap-1 text-sm font-semibold text-zinc-100 hover:text-indigo-400 transition-colors line-clamp-1 mt-1"
+          >
+            {flag && <span className="shrink-0 text-base leading-none">{flag}</span>}
+            <span className="line-clamp-1">{listing.title ?? 'Sans titre'}</span>
           </Link>
 
+          {/* Pricing */}
           <div className="flex items-baseline justify-between pt-1">
             <div className="flex items-baseline gap-2">
               <span className="text-xl font-black text-white">{price?.toFixed(1)}€</span>
-              {effectiveAvg && (
+              {avg && (
                 <span className="text-xs text-zinc-500 line-through">
-                  Moy.{model_market_avg ? ' modèle' : ''} {effectiveAvg.toFixed(0)}€
+                  Moy. {avg.toFixed(0)}€
                 </span>
               )}
             </div>
-          </div>
-        </div>
-
-        <div className="space-y-3 pt-2 border-t border-zinc-800/50">
-          {profit !== null && (
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-zinc-500">Marge estimée :</span>
-              <span className={`text-sm ${getProfitStyle(profit)} flex items-center font-bold`}>
-                {profit >= 0 ? '+' : ''}{profit.toFixed(0)}€
+            {/* Profit highlight */}
+            {profit !== null && profit > 0 && (
+              <span
+                className={`text-lg font-extrabold ${
+                  profit >= 30
+                    ? 'text-emerald-400'
+                    : profit >= 15
+                    ? 'text-cyan-400'
+                    : 'text-amber-400'
+                }`}
+              >
+                +{profit.toFixed(0)}€
               </span>
-            </div>
-          )}
-
-          {aiConfidence !== null && (
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-zinc-500 flex items-center gap-1"><Sparkles size={10} /> IA :</span>
-              <span className={`font-bold text-xs ${aiConfidence >= 0.8 ? 'text-emerald-400' : aiConfidence >= 0.6 ? 'text-amber-400' : 'text-zinc-400'}`}>
-                {Math.round(aiConfidence * 100)}% confiance
-              </span>
-            </div>
-          )}
-
-          {analysis?.scam_risk === 'medium' && (
-            <div className="flex items-center gap-1 text-[10px] text-amber-400">
-              <AlertTriangle size={10} />
-              <span>Risque moyen — vérifiez l'annonce</span>
-            </div>
-          )}
-          {analysis?.scam_risk === 'high' && (
-            <div className="flex items-center gap-1 text-[10px] text-rose-400">
-              <AlertTriangle size={10} />
-              <span>Risque élevé détecté</span>
-            </div>
-          )}
-
-          <div className="flex gap-2 pt-1">
-            <Link href={`/listings/${listing.id}`} className="flex-1 text-center bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs py-2 rounded-xl transition-colors font-medium border border-zinc-700/30 flex items-center justify-center gap-1 group-hover:border-zinc-600">
-              Détails <ArrowUpRight size={13} />
-            </Link>
-            {listing.url && (
-              <a href={listing.url} target="_blank" rel="noopener noreferrer" className="bg-indigo-600 hover:bg-indigo-500 text-white p-2 rounded-xl transition-all duration-200 flex items-center justify-center glow-indigo" title="Ouvrir sur Vinted">
-                <ExternalLink size={14} />
-              </a>
             )}
           </div>
+
+          {/* Score bar */}
+          {score !== null && (
+            <div className="pt-1">
+              <ScoreBar score={score} />
+            </div>
+          )}
+
+          {/* AI Reasoning snippet */}
+          {listing.reasoning && (
+            <div className="pt-1">
+              <ReasoningSnippet text={listing.reasoning} />
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="space-y-2 pt-2 border-t border-zinc-800/50">
+          {listing.url && (
+            <a
+              href={listing.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full flex items-center justify-center gap-2 bg-indigo-700 hover:bg-indigo-600 text-white text-xs font-bold py-2.5 rounded-xl transition-all shadow-md"
+            >
+              Voir sur Vinted
+              <ExternalLink size={13} />
+            </a>
+          )}
+          <Link
+            href={`/listings/${listing.id}`}
+            className="flex items-center justify-center gap-1 w-full text-center bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs py-2 rounded-xl transition-colors font-medium border border-zinc-700/30 group-hover:border-zinc-600"
+          >
+            Détails
+            <ArrowUpRight size={13} />
+          </Link>
         </div>
       </div>
     </div>
