@@ -32,6 +32,9 @@ export class Keyword {
   @Column({ default: 120 })
   scan_interval_seconds: number;
 
+  @Column({ default: 5 })
+  market_scan_pages: number;
+
   @Column({ default: true })
   active: boolean;
 

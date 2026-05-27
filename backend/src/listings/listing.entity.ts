@@ -46,4 +46,10 @@ export class Listing {
 
   @Column({ type: 'timestamptz', default: () => 'NOW()' })
   last_seen_at: Date;
+
+  @Column({ type: 'varchar', length: 200, nullable: true })
+  model_label: string | null;
+
+  @Column({ type: 'decimal', precision: 3, scale: 2, nullable: true })
+  model_confidence: number | null;
 }

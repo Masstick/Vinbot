@@ -29,4 +29,10 @@ export class KeywordListing {
 
   @CreateDateColumn()
   matched_at: Date;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  model_market_avg: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  analysis_id: number | null;
 }
