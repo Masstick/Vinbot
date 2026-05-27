@@ -93,8 +93,9 @@ CREATE TABLE IF NOT EXISTS model_market_avg (
 
 ALTER TABLE keyword_listings
   ADD COLUMN IF NOT EXISTS model_market_avg DECIMAL(10,2),
-  ADD COLUMN IF NOT EXISTS analysis_id INTEGER REFERENCES deal_analyses(id);
+  ADD COLUMN IF NOT EXISTS analysis_id INTEGER REFERENCES deal_analyses(id) ON DELETE SET NULL;
 
 CREATE INDEX IF NOT EXISTS idx_da_listing ON deal_analyses(listing_id);
 CREATE INDEX IF NOT EXISTS idx_da_recommendation ON deal_analyses(recommendation, scam_risk);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_da_unique_listing_keyword ON deal_analyses(listing_id, keyword_id);
 CREATE INDEX IF NOT EXISTS idx_mma_keyword ON model_market_avg(keyword_id);
