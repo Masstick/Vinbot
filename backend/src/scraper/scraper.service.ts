@@ -80,18 +80,13 @@ export class ScraperService implements OnModuleInit {
         return;
       }
 
-      const filteredItems = keyword.catalog_id
-        ? items.filter(item => item.catalog_id === keyword.catalog_id)
-        : items;
-
-      if (filteredItems.length < items.length) {
-        this.logger.log(`  → Filtre catégorie ${keyword.catalog_id} : ${filteredItems.length}/${items.length} items conservés`);
-      }
+      // Le filtre par catalog_id est géré côté serveur via le paramètre catalog_ids[]
+      // L'API Vinted ne retourne pas catalog_id dans les items, donc ne pas filtrer localement
 
       let newCount = 0;
       let alertCount = 0;
 
-      for (const item of filteredItems) {
+      for (const item of items) {
         const { listing, isNew, priceChanged } = await this.listingsService.upsertListing(item, keyword);
 
         if (!isNew && !priceChanged) continue;
