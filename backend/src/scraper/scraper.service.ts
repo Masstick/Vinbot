@@ -123,7 +123,7 @@ export class ScraperService implements OnModuleInit {
         }
       }
 
-      this.logger.log(`  → ${filteredItems.length} annonces | ${newCount} nouvelles/modifiées | ${alertCount} alertes`);
+      this.logger.log(`  → ${items.length} annonces | ${newCount} nouvelles/modifiées | ${alertCount} alertes`);
     } catch (err: any) {
       if (err.message === 'BANNED') {
         this.logger.warn(`Keyword #${keyword.id} bloqué (403) — pause 60s`);
