@@ -191,7 +191,7 @@ export class ScraperService implements OnModuleInit {
   }
 
   private async processModelExtraction(item: ModelQueueItem): Promise<void> {
-    const extraction = await this.mistralService.extractModel(item.title, item.price);
+    const extraction = await this.mistralService.extractModel(item.title, item.price, item.keyword.search_text);
     if (!extraction.model_label) return;
 
     await this.listingsService.updateListingModel(item.listingId, extraction.model_label, extraction.confidence);
