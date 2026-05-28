@@ -77,4 +77,17 @@ describe('VintedClient.parseItem', () => {
     const item = (client as any).parseItem(raw);
     expect(item.vinted_created_at).toBeNull();
   });
+
+  it('handles created_at_ts = 0 as a valid date (epoch)', () => {
+    const raw = {
+      id: 789,
+      title: 'Epoch',
+      price: { amount: '1.00' },
+      user: { login: 'x', id: 1 },
+      created_at_ts: 0,
+    };
+    const item = (client as any).parseItem(raw);
+    expect(item.vinted_created_at).toBeInstanceOf(Date);
+    expect(item.vinted_created_at.getTime()).toBe(0);
+  });
 });
