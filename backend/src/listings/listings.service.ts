@@ -36,7 +36,7 @@ export class ListingsService {
     // Model-specific avg: use as soon as we have any data point
     if (modelLabel) {
       const mma = await this.modelAvgRepo.findOneBy({ keyword_id: keywordId, model_label: modelLabel });
-      if (mma && mma.avg_price) {
+      if (mma && mma.avg_price && mma.item_count >= 3) {
         return { avg: parseFloat(String(mma.avg_price)), itemCount: mma.item_count, source: 'model' };
       }
     }
