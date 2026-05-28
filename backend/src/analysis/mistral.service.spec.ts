@@ -21,6 +21,12 @@ describe('MistralService', () => {
       expect(result).toEqual({ model_label: null, confidence: 0 });
     });
 
+    it('extractModel with searchContext returns null model_label when disabled', async () => {
+      const svc = makeService(undefined);
+      const result = await svc.extractModel('Intel Core i7-12700K', 150, 'processeur i7');
+      expect(result).toEqual({ model_label: null, confidence: 0 });
+    });
+
     it('analyzeDeal returns null', async () => {
       const svc = makeService(undefined);
       const result = await svc.analyzeDeal({} as any, {} as any, 100, 5);

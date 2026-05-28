@@ -41,15 +41,20 @@ export class MistralService implements OnModuleInit {
     return this.client !== null;
   }
 
-  async extractModel(title: string, price: number): Promise<ModelExtraction> {
+  async extractModel(title: string, price: number, searchContext?: string): Promise<ModelExtraction> {
     if (!this.client) return { model_label: null, confidence: 0 };
     try {
+      const contextLine = searchContext
+        ? `Contexte de recherche: "${searchContext}"\n`
+        : '';
       const prompt =
         `Extrait le modèle exact de cet article Vinted en quelques mots normalisés.\n` +
+        contextLine +
         `Titre: "${title}"\nPrix: ${price}€\n\n` +
+        `Sois très précis sur la génération/version (ex: distinguer "Core i7-8700K" de "Core i7-12700K").\n` +
+        `Si le titre ne correspond pas au contexte de recherche ou est trop vague, renvoie {"model_label": null, "confidence": 0.0}.\n` +
         `Réponds uniquement en JSON:\n` +
-        `{"model_label": "modèle normalisé (ex: Intel Core i7-12700K, RTX 3080 10GB)", "confidence": 0.0-1.0}\n` +
-        `Si le titre est trop vague pour identifier un modèle précis, renvoie {"model_label": null, "confidence": 0.0}`;
+        `{"model_label": "modèle précis normalisé (ex: Intel Core i7-12700K, RTX 3080 10GB)", "confidence": 0.0-1.0}`;
       const res = await this.client.post('/chat/completions', {
         model: 'mistral-small-latest',
         messages: [{ role: 'user', content: prompt }],
@@ -62,7 +67,7 @@ export class MistralService implements OnModuleInit {
       if (err.response?.status === 429) {
         this.logger.warn('Mistral rate limit (429) sur extractModel — retry dans 15s');
         await new Promise(r => setTimeout(r, 15_000));
-        return this.extractModel(title, price);
+        return this.extractModel(title, price, searchContext);
       }
       this.logger.warn(`extractModel failed: ${err.message}`);
       return { model_label: null, confidence: 0 };
