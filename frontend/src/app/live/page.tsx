@@ -98,6 +98,7 @@ export default function LivePage() {
   useEffect(() => {
     const socket = socketRef.current;
     if (!socket) return;
+    setConnected(socket.connected);
     const onConnect = () => setConnected(true);
     const onDisconnect = () => setConnected(false);
     socket.on('connect', onConnect);
