@@ -76,6 +76,7 @@ export default function ListingDetailPage() {
   if (!listing) return <div className="text-center text-zinc-500 py-24">Annonce introuvable ou supprimée.</div>;
 
   const kl = listing.keyword_listings?.[0];
+  const listingPrice = listing.price ? parseFloat(String(listing.price)) : null;
   const marketAvg = kl?.market_avg ? parseFloat(String(kl.market_avg)) : null;
   const profit = kl?.potential_profit ? parseFloat(String(kl.potential_profit)) : null;
   const score = kl?.deal_score ? parseFloat(String(kl.deal_score)) : null;
@@ -155,7 +156,7 @@ export default function ListingDetailPage() {
             {/* Core Specs Details */}
             <div className="p-5 space-y-4">
               <div className="flex justify-between items-baseline">
-                <span className="text-3xl font-black text-white">{listing.price?.toFixed(1)}€</span>
+                <span className="text-3xl font-black text-white">{listingPrice?.toFixed(1)}€</span>
                 {marketAvg && (
                   <span className="text-sm text-zinc-500">
                     Moyenne estimée : <strong className="text-zinc-300 font-semibold">{marketAvg.toFixed(0)}€</strong>
