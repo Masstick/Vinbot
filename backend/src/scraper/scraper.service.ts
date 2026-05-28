@@ -110,7 +110,21 @@ export class ScraperService implements OnModuleInit {
 
           let newCount = 0;
           for (const item of items) {
-            const { listing, isNew, priceChanged } = await this.listingsService.upsertListing(item, keyword, countryCode);
+            const { listing, isNew, priceChanged, dealScore, potentialProfit } = await this.listingsService.upsertListing(item, keyword, countryCode);
+
+            if (isNew) {
+              this.dealsGateway.emitNewListing({
+                listingId: listing.id,
+                title: listing.title ?? item.title,
+                price: parseFloat(String(listing.price ?? item.price)),
+                photoUrl: listing.photo_url ?? null,
+                url: listing.url ?? null,
+                keywordLabel: keyword.label,
+                vintedCreatedAt: listing.vinted_created_at ? listing.vinted_created_at.toISOString() : null,
+                dealScore: dealScore ?? null,
+                potentialProfit: potentialProfit ?? null,
+              });
+            }
             if (!isNew && !priceChanged) continue;
             newCount++;
 
