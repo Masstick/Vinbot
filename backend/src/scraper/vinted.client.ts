@@ -160,6 +160,7 @@ export class VintedClient {
       seller_name: item.user?.login ?? '',
       seller_id: item.user?.id ?? 0,
       catalog_id: item.catalog_id ?? null,
+      vinted_created_at: item.created_at_ts ? new Date(item.created_at_ts * 1000) : null,
     };
   }
 }

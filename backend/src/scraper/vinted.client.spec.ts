@@ -44,3 +44,37 @@ describe('VintedClient.filterByTitle', () => {
     expect(filtered).toHaveLength(2);
   });
 });
+
+describe('VintedClient.parseItem', () => {
+  const client = new VintedClient('fr');
+
+  it('maps created_at_ts (unix seconds) to vinted_created_at Date', () => {
+    const raw = {
+      id: 123,
+      title: 'Test',
+      price: { amount: '10.00' },
+      url: 'https://www.vinted.fr/items/123',
+      photo: { url: 'https://example.com/photo.jpg' },
+      brand_title: 'Nike',
+      size_title: 'M',
+      status: 'Très bon état',
+      user: { login: 'seller', id: 42 },
+      catalog_id: 1,
+      created_at_ts: 1716900000,
+    };
+    const item = (client as any).parseItem(raw);
+    expect(item.vinted_created_at).toBeInstanceOf(Date);
+    expect(item.vinted_created_at.getTime()).toBe(1716900000 * 1000);
+  });
+
+  it('sets vinted_created_at to null when created_at_ts is absent', () => {
+    const raw = {
+      id: 456,
+      title: 'No date',
+      price: { amount: '5.00' },
+      user: { login: 'x', id: 1 },
+    };
+    const item = (client as any).parseItem(raw);
+    expect(item.vinted_created_at).toBeNull();
+  });
+});

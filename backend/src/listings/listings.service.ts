@@ -13,6 +13,7 @@ export interface VintedItem {
   photo_url: string; brand: string; size_label: string;
   condition_label: string; seller_name: string; seller_id: number;
   catalog_id: number | null;
+  vinted_created_at: Date | null;
 }
 
 export interface MarketAvgResult {
