@@ -55,4 +55,7 @@ export class Listing {
 
   @Column({ type: 'timestamptz', default: () => 'NOW()' })
   last_seen_at: Date;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  vinted_created_at: Date | null;
 }

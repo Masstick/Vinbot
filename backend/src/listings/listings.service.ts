@@ -137,6 +137,7 @@ export class ListingsService {
         photo_url: item.photo_url, brand: item.brand, size_label: item.size_label,
         condition_label: item.condition_label, seller_name: item.seller_name,
         seller_id: item.seller_id, country_code: countryCode ?? 'fr', last_seen_at: new Date(),
+        vinted_created_at: item.vinted_created_at ?? null,
       });
       listing = await this.listingRepo.save(listing);
       await this.historyRepo.save({ listing_id: listing.id, price: item.price });
