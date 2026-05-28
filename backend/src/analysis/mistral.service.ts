@@ -47,12 +47,15 @@ export class MistralService implements OnModuleInit {
       const contextLine = searchContext
         ? `Contexte de recherche: "${searchContext}"\n`
         : '';
+      const nullInstruction = searchContext
+        ? `Si le titre ne correspond pas au contexte de recherche ou est trop vague, renvoie {"model_label": null, "confidence": 0.0}.\n`
+        : `Si le titre est trop vague pour identifier un modèle précis, renvoie {"model_label": null, "confidence": 0.0}.\n`;
       const prompt =
         `Extrait le modèle exact de cet article Vinted en quelques mots normalisés.\n` +
         contextLine +
         `Titre: "${title}"\nPrix: ${price}€\n\n` +
         `Sois très précis sur la génération/version (ex: distinguer "Core i7-8700K" de "Core i7-12700K").\n` +
-        `Si le titre ne correspond pas au contexte de recherche ou est trop vague, renvoie {"model_label": null, "confidence": 0.0}.\n` +
+        nullInstruction +
         `Réponds uniquement en JSON:\n` +
         `{"model_label": "modèle précis normalisé (ex: Intel Core i7-12700K, RTX 3080 10GB)", "confidence": 0.0-1.0}`;
       const res = await this.client.post('/chat/completions', {
