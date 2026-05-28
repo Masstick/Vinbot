@@ -33,7 +33,7 @@ export class ListingsService {
   ) {}
 
   async computeMarketAvg(keywordId: number, modelLabel?: string | null): Promise<MarketAvgResult> {
-    // Model-specific avg: use as soon as we have any data point
+    // Model-specific avg: requires at least 3 data points to be meaningful
     if (modelLabel) {
       const mma = await this.modelAvgRepo.findOneBy({ keyword_id: keywordId, model_label: modelLabel });
       if (mma && mma.avg_price && mma.item_count >= 3) {
