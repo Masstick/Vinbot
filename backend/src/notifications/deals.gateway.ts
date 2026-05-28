@@ -7,11 +7,18 @@ import {
 import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
 
-/**
- * Gateway WebSocket pour pousser les alertes deal en temps réel
- * vers les clients connectés (dashboard Next.js).
- * Écoute sur le même port que l'API HTTP (CORS * pour dev).
- */
+export interface ListingEvent {
+  listingId: number;
+  title: string;
+  price: number;
+  photoUrl: string | null;
+  url: string | null;
+  keywordLabel: string;
+  vintedCreatedAt: string | null;
+  dealScore: number | null;
+  potentialProfit: number | null;
+}
+
 @WebSocketGateway({ cors: { origin: '*' } })
 export class DealsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
@@ -27,10 +34,6 @@ export class DealsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.logger.log(`Client WS déconnecté : ${client.id}`);
   }
 
-  /**
-   * Émet un événement "new-deal" vers tous les clients connectés.
-   * Appelé par le ScraperService dès qu'un deal rentable est détecté.
-   */
   emitNewDeal(payload: {
     listingId: number;
     title: string;
@@ -44,5 +47,10 @@ export class DealsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }) {
     this.server.emit('new-deal', payload);
     this.logger.log(`📡 Deal émis WS : "${payload.title}" → +${payload.profit.toFixed(0)}€`);
+  }
+
+  emitNewListing(payload: ListingEvent) {
+    this.server.emit('new-listing', payload);
+    this.logger.log(`📡 Listing émis WS : "${payload.title}" — ${payload.price}€`);
   }
 }
