@@ -163,14 +163,14 @@ export class ListingsService {
   }
 
   async getValidated(limit = 50): Promise<any[]> {
-    return this.dataSource.query(
+    const rows = await this.dataSource.query(
       `SELECT kl.keyword_id, kl.listing_id, kl.deal_score, kl.market_avg,
         kl.model_market_avg, kl.potential_profit, kl.matched_at,
-        l.id AS id, l.title, l.price, l.url, l.photo_url, l.brand,
+        l.id AS l_id, l.title, l.price, l.url, l.photo_url, l.brand,
         l.condition_label, l.size_label, l.seller_name, l.first_seen_at,
         l.vinted_created_at, l.model_label, l.model_confidence, l.country_code,
         EXTRACT(EPOCH FROM (NOW() - l.first_seen_at)) / 3600 AS freshness_hours,
-        k.label AS keyword_label, k.target_margin, k.shipping_estimate,
+        k.id AS k_id, k.label AS keyword_label, k.target_margin, k.shipping_estimate,
         da.id AS analysis_id, da.scam_risk, da.confidence AS analysis_confidence,
         da.recommendation, da.reasoning, da.analyzed_at
        FROM keyword_listings kl
@@ -182,6 +182,42 @@ export class ListingsService {
        LIMIT $1`,
       [limit],
     );
+    return rows.map((row: any) => ({
+      keyword_id: row.keyword_id,
+      listing_id: row.listing_id,
+      deal_score: row.deal_score,
+      market_avg: row.market_avg,
+      model_market_avg: row.model_market_avg,
+      potential_profit: row.potential_profit,
+      matched_at: row.matched_at,
+      recommendation: row.recommendation,
+      scam_risk: row.scam_risk,
+      analysis_confidence: row.analysis_confidence,
+      listing: {
+        id: row.l_id,
+        title: row.title,
+        price: row.price,
+        url: row.url,
+        photo_url: row.photo_url,
+        brand: row.brand,
+        condition_label: row.condition_label,
+        size_label: row.size_label,
+        seller_name: row.seller_name,
+        first_seen_at: row.first_seen_at,
+        vinted_created_at: row.vinted_created_at,
+        model_label: row.model_label,
+        model_confidence: row.model_confidence,
+        country_code: row.country_code,
+        freshness_hours: parseFloat(row.freshness_hours) || 0,
+        reasoning: row.reasoning,
+      },
+      keyword: {
+        id: row.k_id,
+        label: row.keyword_label,
+        target_margin: row.target_margin,
+        shipping_estimate: row.shipping_estimate,
+      },
+    }));
   }
 
   async getOpportunities(keywordId?: number, limit = 50): Promise<any[]> {
