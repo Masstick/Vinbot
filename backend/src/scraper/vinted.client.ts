@@ -120,8 +120,9 @@ export class VintedClient {
         timeout: 20000,
       });
 
-      const items: any[] = response.data?.items ?? [];
-      return items.map(item => this.parseItem(item)).filter(i => i.price > 0);
+      const rawItems: any[] = response.data?.items ?? [];
+      const filtered = this.filterByTitle(rawItems, searchText);
+      return filtered.map(item => this.parseItem(item)).filter(i => i.price > 0);
     } catch (err: any) {
       if (err.response?.status === 403) {
         this.logger.warn(`Vinted 403 [${this.countryCode}] — reset session`);
@@ -131,6 +132,19 @@ export class VintedClient {
       this.logger.error(`Erreur search [${this.countryCode}] "${searchText}": ${err.message}`);
       return [];
     }
+  }
+
+  private filterByTitle(items: any[], searchText: string): any[] {
+    const tokens = searchText
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(t => t.length >= 2);
+    if (tokens.length === 0) return items;
+    return items.filter(item => {
+      const title = (item.title ?? '').toLowerCase();
+      if (!title) return false;
+      return tokens.some(token => title.includes(token));
+    });
   }
 
   private parseItem(item: any): VintedItem {
