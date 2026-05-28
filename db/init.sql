@@ -31,7 +31,8 @@ CREATE TABLE IF NOT EXISTS listings (
   view_count      INTEGER,
   favourite_count INTEGER,
   first_seen_at   TIMESTAMPTZ DEFAULT NOW(),
-  last_seen_at    TIMESTAMPTZ DEFAULT NOW()
+  last_seen_at    TIMESTAMPTZ DEFAULT NOW(),
+  vinted_created_at TIMESTAMPTZ
 );
 
 CREATE TABLE IF NOT EXISTS keyword_listings (
@@ -63,3 +64,4 @@ CREATE INDEX IF NOT EXISTS idx_price_history_listing_id ON price_history(listing
 CREATE INDEX IF NOT EXISTS idx_kl_keyword_id ON keyword_listings(keyword_id);
 CREATE INDEX IF NOT EXISTS idx_kl_deal_score ON keyword_listings(deal_score DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_log ON notifications_log(listing_id, keyword_id, sent_at);
+CREATE INDEX IF NOT EXISTS idx_listings_vinted_created_at ON listings(vinted_created_at DESC);
