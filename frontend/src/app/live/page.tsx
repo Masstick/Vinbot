@@ -2,7 +2,7 @@
 import { useCallback, useState } from 'react';
 import { useListingsSocket } from '@/lib/useListingsSocket';
 import { ListingEvent } from '@/lib/listingEvent';
-import { Radio, ExternalLink, TrendingDown, Filter } from 'lucide-react';
+import { Radio, ExternalLink, Filter } from 'lucide-react';
 
 const MAX_ITEMS = 200;
 
