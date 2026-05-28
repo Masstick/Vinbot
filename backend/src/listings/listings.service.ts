@@ -127,7 +127,7 @@ export class ListingsService {
     return results;
   }
 
-  async upsertListing(item: VintedItem, keyword: Keyword, countryCode?: string): Promise<{ listing: Listing; isNew: boolean; priceChanged: boolean }> {
+  async upsertListing(item: VintedItem, keyword: Keyword, countryCode?: string): Promise<{ listing: Listing; isNew: boolean; priceChanged: boolean; dealScore: number | null; potentialProfit: number | null }> {
     const existing = await this.listingRepo.findOneBy({ vinted_id: item.vinted_id });
     let isNew = false; let priceChanged = false; let listing: Listing;
     if (!existing) {
@@ -159,7 +159,7 @@ export class ListingsService {
       { keyword_id: keyword.id, listing_id: listing.id, deal_score: dealScore, market_avg: marketAvg, potential_profit: potentialProfit, matched_at: new Date() },
       ['keyword_id', 'listing_id'],
     );
-    return { listing, isNew, priceChanged };
+    return { listing, isNew, priceChanged, dealScore, potentialProfit };
   }
 
   async getValidated(limit = 50): Promise<any[]> {
