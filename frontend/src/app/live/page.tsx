@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useListingsSocket } from '@/lib/useListingsSocket';
 import { ListingEvent } from '@/lib/listingEvent';
 import { Radio, ExternalLink, Filter } from 'lucide-react';
@@ -53,7 +53,7 @@ function ListingRow({ listing, receivedAt }: ListingRowProps) {
 
       {/* Deal score */}
       <span className={`shrink-0 text-xs font-bold w-14 text-right ${dealScoreColor(listing.dealScore)}`}>
-        {listing.dealScore !== null ? `${listing.dealScore > 0 ? '-' : '+'}${Math.abs(listing.dealScore).toFixed(0)}%` : '—'}
+        {listing.dealScore !== null ? `${Math.abs(listing.dealScore).toFixed(0)}%` : '—'}
       </span>
 
       {/* Received time */}
@@ -95,12 +95,18 @@ export default function LivePage() {
 
   const socketRef = useListingsSocket(handleListing);
 
-  // Track connection state
-  const [, forceUpdate] = useState(0);
-  if (socketRef.current && !connected) {
-    socketRef.current.on('connect', () => setConnected(true));
-    socketRef.current.on('disconnect', () => setConnected(false));
-  }
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket) return;
+    const onConnect = () => setConnected(true);
+    const onDisconnect = () => setConnected(false);
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    return () => {
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+    };
+  }, []); // socketRef.current is stable after mount
 
   const displayed = filter === 'profitable'
     ? items.filter(i => i.potentialProfit !== null && i.potentialProfit > 0)
