@@ -5,6 +5,7 @@ import { DealCard } from '@/components/DealCard';
 import { ShieldCheck, ArrowUpDown, Filter, TrendingUp, AlertCircle, Sparkles } from 'lucide-react';
 
 function getFreshnessHours(listing: KeywordListing['listing']): number {
+  if (listing.freshness_hours !== undefined) return listing.freshness_hours;
   const ref = listing.vinted_created_at ?? listing.first_seen_at;
   return (Date.now() - new Date(ref).getTime()) / 3_600_000;
 }

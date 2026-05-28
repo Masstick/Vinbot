@@ -90,7 +90,7 @@ export const api = {
   listings: {
     list: (keywordId?: number) => req<KeywordListing[]>(`/listings${keywordId ? `?keyword_id=${keywordId}` : ''}`),
     opportunities: (keywordId?: number) => req<KeywordListing[]>(`/listings/opportunities${keywordId ? `?keyword_id=${keywordId}` : ''}`),
-    validated: () => req<KeywordListing[]>('/listings/opportunities'),
+    validated: () => req<KeywordListing[]>('/listings/validated'),
     get: (id: number) => req<any>(`/listings/${id}`),
     history: (id: number) => req<PricePoint[]>(`/listings/${id}/history`),
     stats: () => req<Stats>('/listings/stats'),
