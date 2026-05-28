@@ -168,7 +168,7 @@ export class ListingsService {
         kl.model_market_avg, kl.potential_profit, kl.matched_at,
         l.id AS id, l.title, l.price, l.url, l.photo_url, l.brand,
         l.condition_label, l.size_label, l.seller_name, l.first_seen_at,
-        l.model_label, l.model_confidence, l.country_code,
+        l.vinted_created_at, l.model_label, l.model_confidence, l.country_code,
         EXTRACT(EPOCH FROM (NOW() - l.first_seen_at)) / 3600 AS freshness_hours,
         k.label AS keyword_label, k.target_margin, k.shipping_estimate,
         da.id AS analysis_id, da.scam_risk, da.confidence AS analysis_confidence,
