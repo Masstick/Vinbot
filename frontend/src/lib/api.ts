@@ -40,6 +40,8 @@ export interface Listing {
   seller_name: string | null;
   first_seen_at: string;
   last_seen_at: string;
+  /** Real Vinted publication date (from API created_at_ts). Null for listings scraped before this feature. */
+  vinted_created_at?: string | null;
   /** Derived server-side or computed client-side from first_seen_at */
   freshness_hours?: number;
   /** ISO country code of the seller's country, e.g. "fr", "be", "es" */

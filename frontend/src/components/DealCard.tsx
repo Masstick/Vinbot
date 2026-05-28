@@ -8,8 +8,8 @@ import { ExternalLink, TrendingDown, ArrowUpRight, Clock } from 'lucide-react';
 
 function getFreshnessHours(listing: KeywordListing['listing']): number {
   if (listing.freshness_hours !== undefined) return listing.freshness_hours;
-  const firstSeen = new Date(listing.first_seen_at).getTime();
-  return (Date.now() - firstSeen) / 3_600_000;
+  const ref = listing.vinted_created_at ?? listing.first_seen_at;
+  return (Date.now() - new Date(ref).getTime()) / 3_600_000;
 }
 
 interface FreshnessBadgeProps {

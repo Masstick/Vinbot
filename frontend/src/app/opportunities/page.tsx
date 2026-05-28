@@ -62,9 +62,9 @@ export default function OpportunitiesPage() {
         return scoreB - scoreA;
       }
       if (sortBy === 'date-desc') {
-        const dateA = new Date(a.matched_at).getTime();
-        const dateB = new Date(b.matched_at).getTime();
-        return dateB - dateA;
+        const refA = a.listing.vinted_created_at ?? a.listing.first_seen_at;
+        const refB = b.listing.vinted_created_at ?? b.listing.first_seen_at;
+        return new Date(refB).getTime() - new Date(refA).getTime();
       }
       return 0;
     });
@@ -132,7 +132,7 @@ export default function OpportunitiesPage() {
           >
             <option value="profit-desc">Marge estimée (décroissante)</option>
             <option value="score-desc">Score du Deal (décroissant)</option>
-            <option value="date-desc">Détection la plus récente</option>
+            <option value="date-desc">Mise en ligne la plus récente</option>
           </select>
         </div>
 

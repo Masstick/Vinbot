@@ -4,8 +4,9 @@ import { api, KeywordListing } from '@/lib/api';
 import { DealCard } from '@/components/DealCard';
 import { ShieldCheck, ArrowUpDown, Filter, TrendingUp, AlertCircle, Sparkles } from 'lucide-react';
 
-function getFreshnessHours(firstSeenAt: string): number {
-  return (Date.now() - new Date(firstSeenAt).getTime()) / 3_600_000;
+function getFreshnessHours(listing: KeywordListing['listing']): number {
+  const ref = listing.vinted_created_at ?? listing.first_seen_at;
+  return (Date.now() - new Date(ref).getTime()) / 3_600_000;
 }
 
 function SkeletonCard() {
@@ -71,8 +72,8 @@ export default function ValidatedPage() {
         return sB - sA;
       }
       if (sortBy === 'fresh-asc') {
-        const fA = getFreshnessHours(a.listing.first_seen_at);
-        const fB = getFreshnessHours(b.listing.first_seen_at);
+        const fA = getFreshnessHours(a.listing);
+        const fB = getFreshnessHours(b.listing);
         return fA - fB;
       }
       return 0;
