@@ -1,7 +1,8 @@
 'use client';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { api, KeywordListing, Keyword } from '@/lib/api';
 import { DealCard } from '@/components/DealCard';
+import { useKeywordChanged } from '@/lib/useKeywordChanged';
 import { Filter, SlidersHorizontal, ArrowUpDown, ShieldAlert, Sparkles } from 'lucide-react';
 
 function SkeletonCard() {
@@ -29,17 +30,23 @@ export default function OpportunitiesPage() {
   const [sortBy, setSortBy] = useState<string>('profit-desc'); // profit-desc, score-desc, date-desc
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    api.keywords.list().then(setKeywords).catch(() => {});
-  }, []);
-
-  useEffect(() => {
+  const loadOpportunities = useCallback(() => {
     setLoading(true);
     api.listings.opportunities(selectedKw)
       .then(data => setKls(data as KeywordListing[]))
       .catch(() => setKls([]))
       .finally(() => setLoading(false));
   }, [selectedKw]);
+
+  useEffect(() => {
+    api.keywords.list().then(setKeywords).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    loadOpportunities();
+  }, [loadOpportunities]);
+
+  useKeywordChanged(loadOpportunities);
 
   // Filtrage et Tri
   const processedListings = useMemo(() => {

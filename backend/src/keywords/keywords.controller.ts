@@ -1,10 +1,14 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, ParseIntPipe, ValidationPipe } from '@nestjs/common';
 import { KeywordsService } from './keywords.service';
 import { CreateKeywordDto } from './dto/create-keyword.dto';
+import { DealsGateway } from '../notifications/deals.gateway';
 
 @Controller('keywords')
 export class KeywordsController {
-  constructor(private readonly service: KeywordsService) {}
+  constructor(
+    private readonly service: KeywordsService,
+    private readonly gateway: DealsGateway,
+  ) {}
 
   @Get()
   findAll() {
@@ -17,17 +21,22 @@ export class KeywordsController {
   }
 
   @Post()
-  create(@Body(ValidationPipe) dto: CreateKeywordDto) {
-    return this.service.create(dto);
+  async create(@Body(ValidationPipe) dto: CreateKeywordDto) {
+    const kw = await this.service.create(dto);
+    this.gateway.emitKeywordChanged();
+    return kw;
   }
 
   @Put(':id')
-  update(@Param('id', ParseIntPipe) id: number, @Body(ValidationPipe) dto: CreateKeywordDto) {
-    return this.service.update(id, dto);
+  async update(@Param('id', ParseIntPipe) id: number, @Body(ValidationPipe) dto: CreateKeywordDto) {
+    const kw = await this.service.update(id, dto);
+    this.gateway.emitKeywordChanged();
+    return kw;
   }
 
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.service.remove(id);
+  async remove(@Param('id', ParseIntPipe) id: number) {
+    await this.service.remove(id);
+    this.gateway.emitKeywordChanged();
   }
 }

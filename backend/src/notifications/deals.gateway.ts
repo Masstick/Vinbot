@@ -53,4 +53,8 @@ export class DealsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.server.emit('new-listing', payload);
     this.logger.log(`📡 Listing émis WS : "${payload.title}" — ${payload.price}€`);
   }
+
+  emitKeywordChanged() {
+    this.server.emit('keyword-changed');
+  }
 }

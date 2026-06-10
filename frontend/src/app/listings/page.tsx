@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { api, KeywordListing, Keyword } from '@/lib/api';
 import { DealCard } from '@/components/DealCard';
 import { Newspaper, Filter, Search, Clock, Globe, RefreshCw, ChevronDown } from 'lucide-react';
+import { useKeywordChanged } from '@/lib/useKeywordChanged';
 
 const PAGE_SIZE = 48;
 
@@ -86,6 +87,8 @@ export default function LatestListingsPage() {
     }, 30000);
     return () => clearInterval(interval);
   }, [load]);
+
+  useKeywordChanged(() => load(false));
 
   const loadMore = () => {
     setLoadingMore(true);

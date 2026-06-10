@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { api, KeywordListing, Stats } from '@/lib/api';
 import { DealCard } from '@/components/DealCard';
+import { useKeywordChanged } from '@/lib/useKeywordChanged';
 import { RefreshCw, Database, Hash, Bell, Bot, Calendar, Sparkles, Plus } from 'lucide-react';
 
 function ScraperStatusBar({ status }: { status: any }) {
@@ -132,10 +133,11 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadData();
-    // Rafraîchissement auto toutes les 30s
     const interval = setInterval(() => loadData(false), 30000);
     return () => clearInterval(interval);
   }, [loadData]);
+
+  useKeywordChanged(() => loadData(false));
 
   return (
     <div className="space-y-8">
