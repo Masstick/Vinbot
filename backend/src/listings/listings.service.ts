@@ -123,6 +123,11 @@ export class ListingsService {
     return this.listingRepo.findOneBy({ id: listingId });
   }
 
+  /** Nombre d'annonces déjà associées à un mot-clé — sert à décider d'un bootstrap. */
+  async countKeywordListings(keywordId: number): Promise<number> {
+    return this.klRepo.countBy({ keyword_id: keywordId });
+  }
+
   async getListingsWithoutModel(limit = 200): Promise<Array<{ listing: Listing; keywordId: number; shippingEstimate: number; targetMargin: number }>> {
     const rows = await this.dataSource.query<Array<{ id: number; keyword_id: number; shipping_estimate: string; target_margin: string }>>(
       `SELECT DISTINCT ON (l.id) l.id, kl.keyword_id, k.shipping_estimate, k.target_margin
@@ -142,7 +147,7 @@ export class ListingsService {
     return results;
   }
 
-  async upsertListing(item: VintedItem, keyword: Keyword, countryCode?: string): Promise<{ listing: Listing; isNew: boolean; priceChanged: boolean; dealScore: number | null; potentialProfit: number | null }> {
+  async upsertListing(item: VintedItem, keyword: Keyword, countryCode?: string): Promise<{ listing: Listing; isNew: boolean; priceChanged: boolean; dealScore: number | null; potentialProfit: number | null; marketAvg: number | null; marketItemCount: number }> {
     const existing = await this.listingRepo.findOneBy({ vinted_id: item.vinted_id });
     let isNew = false; let priceChanged = false; let listing: Listing;
     if (!existing) {
@@ -166,7 +171,7 @@ export class ListingsService {
         listing.price = item.price;
       }
     }
-    const { avg: marketAvg } = await this.computeMarketAvg(keyword.id, listing.model_label, listing.id);
+    const { avg: marketAvg, itemCount: marketItemCount } = await this.computeMarketAvg(keyword.id, listing.model_label, listing.id);
     const shippingEst = parseFloat(String(keyword.shipping_estimate)) || 4;
     const dealScore = marketAvg ? ((marketAvg - item.price) / marketAvg) * 100 : null;
     const potentialProfit = marketAvg ? marketAvg - item.price - shippingEst : null;
@@ -174,7 +179,7 @@ export class ListingsService {
       { keyword_id: keyword.id, listing_id: listing.id, deal_score: dealScore, market_avg: marketAvg, potential_profit: potentialProfit, matched_at: new Date() },
       ['keyword_id', 'listing_id'],
     );
-    return { listing, isNew, priceChanged, dealScore, potentialProfit };
+    return { listing, isNew, priceChanged, dealScore, potentialProfit, marketAvg, marketItemCount };
   }
 
   async getValidated(limit = 50): Promise<any[]> {

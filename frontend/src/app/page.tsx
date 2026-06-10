@@ -42,7 +42,11 @@ function ScraperStatusBar({ status }: { status: any }) {
           )}
         </div>
         <span className="text-sm font-semibold text-zinc-200">
-          {isRunning ? 'Scraper en cours de recherche…' : 'Scraper en veille (prochain scan < 35s)'}
+          {status.bootstrappingKeyword
+            ? `Construction de l'historique pour « ${status.bootstrappingKeyword} »…`
+            : isRunning
+            ? 'Scraper en cours de recherche…'
+            : 'Scraper en veille (prochain scan < 35s)'}
         </span>
         {status.lastScrapeTime && (
           <span className="text-xs text-zinc-500 ml-auto flex items-center gap-1">

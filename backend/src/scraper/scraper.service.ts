@@ -12,6 +12,15 @@ import { AsyncQueue } from '../analysis/async-queue';
 const FAST_TICK_MS = 30_000;
 const MARKET_TICK_MS = 600_000;
 
+// Bootstrap : collecte d'historique immédiate pour un mot-clé sans données
+const BOOTSTRAP_PAGES = 10; // ~960 annonces → prix moyen fiable dès l'ajout
+const BOOTSTRAP_MIN_LISTINGS = 150; // en dessous, l'historique est jugé insuffisant
+
+// Déclenchement de l'analyse IA sans attendre l'extraction de modèle
+const AI_DEAL_SCORE_THRESHOLD = 40; // % sous la médiane
+const AI_MIN_MARKET_ITEMS = 10; // échantillon mini pour faire confiance au score
+const AI_MIN_PRICE = 3; // ignore les babioles à quelques centimes
+
 function randInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
@@ -41,6 +50,8 @@ export class ScraperService implements OnModuleInit {
   private isMarketRunning = false;
   private lastRunAt: Map<number, number> = new Map();
   private lastScrapeTime: Date | null = null;
+  private readonly bootstrappedKeywords = new Set<number>();
+  private bootstrappingKeyword: string | null = null;
 
   private readonly modelQueue: AsyncQueue<ModelQueueItem>;
   private readonly analysisQueue: AsyncQueue<AnalysisQueueItem>;
@@ -94,9 +105,69 @@ export class ScraperService implements OnModuleInit {
       : String(keyword.country_codes ?? 'fr').split(',').map(s => s.trim()).filter(Boolean);
   }
 
+  private queueModelExtraction(listingId: number, title: string, price: number, keyword: Keyword): void {
+    this.modelQueue.push({
+      listingId,
+      title,
+      price,
+      keywordId: keyword.id,
+      shippingEstimate: parseFloat(String(keyword.shipping_estimate)) || 4,
+      targetMargin: parseFloat(String(keyword.target_margin)) || 10,
+      keyword,
+    }).catch(() => {});
+  }
+
+  /**
+   * Un mot-clé fraîchement ajouté n'a pas d'historique : le prix moyen serait
+   * faux et rien ne sortirait avant des heures. On aspire immédiatement
+   * BOOTSTRAP_PAGES pages pour construire la médiane (un seul mot-clé par tick).
+   */
+  private async bootstrapNewKeywords(keywords: Keyword[]): Promise<void> {
+    for (const keyword of keywords) {
+      if (this.bootstrappedKeywords.has(keyword.id)) continue;
+      const count = await this.listingsService.countKeywordListings(keyword.id);
+      if (count >= BOOTSTRAP_MIN_LISTINGS) {
+        this.bootstrappedKeywords.add(keyword.id);
+        continue;
+      }
+      this.bootstrappingKeyword = keyword.label;
+      this.logger.log(`[Bootstrap] "${keyword.label}" — ${count} annonces en base, collecte de ${BOOTSTRAP_PAGES} pages…`);
+      const primaryCountry = this.getCountryCodes(keyword)[0] ?? 'fr';
+      const client = this.clientPool.getClient(primaryCountry);
+      let inserted = 0;
+      try {
+        for (let page = 1; page <= BOOTSTRAP_PAGES; page++) {
+          const items = await client.search(
+            keyword.search_text, keyword.min_price, keyword.max_price, 96, page, keyword.catalog_id,
+          );
+          if (items.length === 0) break;
+          for (const item of items) {
+            const { listing, isNew } = await this.listingsService.upsertListing(item, keyword, primaryCountry);
+            if (isNew) {
+              inserted++;
+              if (this.mistralService.isEnabled() && item.title) {
+                this.queueModelExtraction(listing.id, item.title, item.price, keyword);
+              }
+            }
+          }
+          await this.delay(randInt(2_000, 4_000));
+        }
+      } catch (err: any) {
+        this.logger.warn(`[Bootstrap] "${keyword.label}" interrompu : ${err.message}`);
+      } finally {
+        this.bootstrappedKeywords.add(keyword.id);
+        this.bootstrappingKeyword = null;
+      }
+      this.logger.log(`[Bootstrap] "${keyword.label}" terminé — ${inserted} annonces insérées`);
+      break; // un seul bootstrap par tick pour ne pas bloquer les autres scans
+    }
+  }
+
   private async runFastScan(): Promise<void> {
     const keywords = await this.keywordsService.findActive();
     if (keywords.length === 0) return;
+
+    await this.bootstrapNewKeywords(keywords);
 
     for (const keyword of keywords) {
       const countryCodes = this.getCountryCodes(keyword);
@@ -110,7 +181,8 @@ export class ScraperService implements OnModuleInit {
 
           let newCount = 0;
           for (const item of items) {
-            const { listing, isNew, priceChanged, dealScore, potentialProfit } = await this.listingsService.upsertListing(item, keyword, countryCode);
+            const { listing, isNew, priceChanged, dealScore, potentialProfit, marketAvg, marketItemCount } =
+              await this.listingsService.upsertListing(item, keyword, countryCode);
 
             if (isNew) {
               this.dealsGateway.emitNewListing({
@@ -129,15 +201,17 @@ export class ScraperService implements OnModuleInit {
             newCount++;
 
             if (isNew && this.mistralService.isEnabled()) {
-              this.modelQueue.push({
-                listingId: listing.id,
-                title: listing.title ?? item.title,
-                price: parseFloat(String(listing.price ?? item.price)),
-                keywordId: keyword.id,
-                shippingEstimate: parseFloat(String(keyword.shipping_estimate)) || 4,
-                targetMargin: parseFloat(String(keyword.target_margin)) || 10,
-                keyword,
-              }).catch(() => {});
+              this.queueModelExtraction(listing.id, listing.title ?? item.title, item.price, keyword);
+              // Annonce nettement sous la médiane : analyse IA immédiate, sans
+              // attendre qu'un modèle précis soit identifié (souvent impossible
+              // pour les lots de cartes, vêtements, etc.)
+              const targetMargin = parseFloat(String(keyword.target_margin)) || 10;
+              const aiWorthy = marketAvg !== null && marketItemCount >= AI_MIN_MARKET_ITEMS && item.price >= AI_MIN_PRICE
+                && ((potentialProfit !== null && potentialProfit >= targetMargin)
+                  || (dealScore !== null && dealScore >= AI_DEAL_SCORE_THRESHOLD));
+              if (aiWorthy) {
+                this.analysisQueue.push({ listing, keyword, marketAvg: marketAvg!, itemCount: marketItemCount }).catch(() => {});
+              }
             } else if (isNew || priceChanged) {
               await this.maybeAlertClassic(listing, keyword);
             }
@@ -181,15 +255,7 @@ export class ScraperService implements OnModuleInit {
           for (const item of items) {
             const { listing, isNew } = await this.listingsService.upsertListing(item, keyword, primaryCountry);
             if (isNew && item.title) {
-              this.modelQueue.push({
-                listingId: listing.id,
-                title: listing.title ?? item.title,
-                price: parseFloat(String(listing.price ?? item.price)),
-                keywordId: keyword.id,
-                shippingEstimate: parseFloat(String(keyword.shipping_estimate)) || 4,
-                targetMargin: parseFloat(String(keyword.target_margin)) || 10,
-                keyword,
-              }).catch(() => {});
+              this.queueModelExtraction(listing.id, listing.title ?? item.title, item.price, keyword);
             }
           }
           await this.delay(randInt(2_000, 5_000));
@@ -211,14 +277,17 @@ export class ScraperService implements OnModuleInit {
     await this.listingsService.updateListingModel(item.listingId, extraction.model_label, extraction.confidence);
     await this.listingsService.updateModelMarketAvg(item.keywordId, extraction.model_label);
 
-    const { marketAvg, itemCount, potentialProfit } = await this.listingsService.rescoreWithModel(
+    const { marketAvg, itemCount, potentialProfit, dealScore } = await this.listingsService.rescoreWithModel(
       item.listingId, item.keywordId, extraction.model_label, item.shippingEstimate,
     );
 
-    if (marketAvg && potentialProfit !== null && potentialProfit >= item.targetMargin) {
+    const worthAnalyzing = marketAvg !== null
+      && ((potentialProfit !== null && potentialProfit >= item.targetMargin)
+        || (dealScore !== null && dealScore >= AI_DEAL_SCORE_THRESHOLD));
+    if (worthAnalyzing) {
       const listing = await this.listingsService.getListingById(item.listingId);
       if (listing) {
-        this.analysisQueue.push({ listing, keyword: item.keyword, marketAvg, itemCount }).catch(() => {});
+        this.analysisQueue.push({ listing, keyword: item.keyword, marketAvg: marketAvg!, itemCount }).catch(() => {});
       }
     }
   }
@@ -234,6 +303,12 @@ export class ScraperService implements OnModuleInit {
       const shippingEst = parseFloat(String(item.keyword.shipping_estimate)) || 4;
       const potentialProfit = item.marketAvg - price - shippingEst;
       const dealScore = ((item.marketAvg - price) / item.marketAvg) * 100;
+
+      if (result.recommendation === 'buy') {
+        await this.telegramService
+          .sendDealAlert(item.listing, item.keyword, dealScore, item.marketAvg, potentialProfit)
+          .catch(err => this.logger.warn(`Alerte Telegram échouée : ${err.message}`));
+      }
 
       this.dealsGateway.emitNewDeal({
         listingId: item.listing.id,
@@ -279,6 +354,7 @@ export class ScraperService implements OnModuleInit {
     return {
       isFastRunning: this.isFastRunning,
       isMarketRunning: this.isMarketRunning,
+      bootstrappingKeyword: this.bootstrappingKeyword,
       lastScrapeTime: this.lastScrapeTime,
       activeKeywords: keywords.length,
       mistralEnabled: this.mistralService.isEnabled(),
