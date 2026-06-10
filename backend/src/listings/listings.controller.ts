@@ -6,13 +6,27 @@ export class ListingsController {
   constructor(private readonly service: ListingsService) {}
 
   @Get()
-  findAll(@Query('keyword_id') keywordId?: string) {
-    return this.service.getListings(keywordId ? parseInt(keywordId) : undefined);
+  findAll(
+    @Query('keyword_id') keywordId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+    @Query('country') country?: string,
+    @Query('q') q?: string,
+    @Query('max_age_hours') maxAgeHours?: string,
+  ) {
+    return this.service.getListings({
+      keywordId: keywordId ? parseInt(keywordId) : undefined,
+      limit: limit ? parseInt(limit) : undefined,
+      offset: offset ? parseInt(offset) : undefined,
+      country: country || undefined,
+      q: q || undefined,
+      maxAgeHours: maxAgeHours ? parseInt(maxAgeHours) : undefined,
+    });
   }
 
   @Get('opportunities')
-  getOpportunities(@Query('keyword_id') keywordId?: string) {
-    return this.service.getOpportunities(keywordId ? parseInt(keywordId) : undefined);
+  getOpportunities(@Query('keyword_id') keywordId?: string, @Query('limit') limit?: string) {
+    return this.service.getOpportunities(keywordId ? parseInt(keywordId) : undefined, limit ? parseInt(limit) : 50);
   }
 
   @Get('validated')

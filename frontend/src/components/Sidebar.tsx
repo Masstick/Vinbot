@@ -2,10 +2,11 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, TrendingUp, Tags, Settings, Menu, X, Bot, ShieldCheck, Radio } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, Tags, Settings, Menu, X, Bot, ShieldCheck, Newspaper, Radio } from 'lucide-react';
 
 const navLinks = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/listings', label: 'Dernières annonces', icon: Newspaper },
   { href: '/opportunities', label: 'Opportunités', icon: TrendingUp },
   { href: '/validated', label: 'Deals validés', icon: ShieldCheck },
   { href: '/live', label: 'Live', icon: Radio },

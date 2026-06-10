@@ -77,6 +77,67 @@ export interface Stats {
   total_listings: number;
   active_keywords: number;
   alerts_24h: number;
+  validated_deals: number;
+  listings_24h: number;
+}
+
+export interface LatestListingsParams {
+  keywordId?: number;
+  limit?: number;
+  offset?: number;
+  country?: string;
+  q?: string;
+  maxAgeHours?: number;
+}
+
+/**
+ * Les endpoints SQL bruts (/listings, /listings/validated) renvoient des lignes
+ * plates (l.* + kl.* + k.* + da.*) — on les remet en forme KeywordListing
+ * pour réutiliser DealCard partout.
+ */
+function rowToKeywordListing(row: any): KeywordListing {
+  const listingId = row.listing_id ?? row.id;
+  return {
+    keyword_id: row.keyword_id,
+    listing_id: listingId,
+    deal_score: row.deal_score,
+    market_avg: row.market_avg,
+    potential_profit: row.potential_profit,
+    matched_at: row.matched_at,
+    analysis_confidence: row.analysis_confidence ?? undefined,
+    recommendation: row.recommendation ?? undefined,
+    scam_risk: row.scam_risk ?? undefined,
+    keyword: { id: row.keyword_id, label: row.keyword_label } as Keyword,
+    listing: {
+      id: listingId,
+      vinted_id: row.vinted_id,
+      title: row.title ?? null,
+      price: row.price ?? null,
+      url: row.url ?? null,
+      photo_url: row.photo_url ?? null,
+      brand: row.brand ?? null,
+      size_label: row.size_label ?? null,
+      condition_label: row.condition_label ?? null,
+      seller_name: row.seller_name ?? null,
+      first_seen_at: row.first_seen_at,
+      last_seen_at: row.last_seen_at ?? row.first_seen_at,
+      freshness_hours: row.freshness_hours != null ? parseFloat(String(row.freshness_hours)) : undefined,
+      country_code: row.country_code ?? undefined,
+      reasoning: row.reasoning ?? undefined,
+    },
+  };
+}
+
+function latestQuery(p: LatestListingsParams): string {
+  const qs = new URLSearchParams();
+  if (p.keywordId) qs.set('keyword_id', String(p.keywordId));
+  if (p.limit) qs.set('limit', String(p.limit));
+  if (p.offset) qs.set('offset', String(p.offset));
+  if (p.country) qs.set('country', p.country);
+  if (p.q) qs.set('q', p.q);
+  if (p.maxAgeHours) qs.set('max_age_hours', String(p.maxAgeHours));
+  const s = qs.toString();
+  return s ? `?${s}` : '';
 }
 
 export const api = {
@@ -88,9 +149,10 @@ export const api = {
     delete: (id: number) => req<void>(`/keywords/${id}`, { method: 'DELETE' }),
   },
   listings: {
-    list: (keywordId?: number) => req<KeywordListing[]>(`/listings${keywordId ? `?keyword_id=${keywordId}` : ''}`),
+    latest: (params: LatestListingsParams = {}) =>
+      req<any[]>(`/listings${latestQuery(params)}`).then(rows => rows.map(rowToKeywordListing)),
     opportunities: (keywordId?: number) => req<KeywordListing[]>(`/listings/opportunities${keywordId ? `?keyword_id=${keywordId}` : ''}`),
-    validated: () => req<KeywordListing[]>('/listings/validated'),
+    validated: () => req<any[]>('/listings/validated').then(rows => rows.map(rowToKeywordListing)),
     get: (id: number) => req<any>(`/listings/${id}`),
     history: (id: number) => req<PricePoint[]>(`/listings/${id}/history`),
     stats: () => req<Stats>('/listings/stats'),

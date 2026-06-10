@@ -19,14 +19,18 @@ function ScraperStatusBar({ status }: { status: any }) {
 
   if (!status) return null;
 
-  const keywords: { id: number; label: string; nextRunInSeconds: number; lastRunAt: string | null }[] =
+  const isRunning = status.isFastRunning || status.isMarketRunning;
+  const keywords: { id: number; label: string; lastRunAt: string | null; countryCodes?: string[] }[] =
     status.keywords ?? [];
+
+  // tick force le re-render chaque seconde pour rafraîchir les durées affichées
+  void tick;
 
   return (
     <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-5 glow-indigo backdrop-blur-md">
       <div className="flex items-center gap-3 mb-4">
         <div className="relative flex h-3 w-3">
-          {status.isRunning ? (
+          {isRunning ? (
             <>
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
@@ -38,7 +42,7 @@ function ScraperStatusBar({ status }: { status: any }) {
           )}
         </div>
         <span className="text-sm font-semibold text-zinc-200">
-          {status.isRunning ? 'Scraper en cours de recherche…' : 'Scraper en veille planifiée'}
+          {isRunning ? 'Scraper en cours de recherche…' : 'Scraper en veille (prochain scan < 35s)'}
         </span>
         {status.lastScrapeTime && (
           <span className="text-xs text-zinc-500 ml-auto flex items-center gap-1">
@@ -51,24 +55,27 @@ function ScraperStatusBar({ status }: { status: any }) {
       {keywords.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {keywords.map(kw => {
-            const remaining = Math.max(0, kw.nextRunInSeconds - tick);
-            const maxSeconds = kw.nextRunInSeconds > 0 ? kw.nextRunInSeconds : 120;
-            const pct = Math.min(100, Math.max(0, 100 - (remaining / maxSeconds) * 100));
+            const elapsed = kw.lastRunAt
+              ? Math.max(0, Math.round((Date.now() - new Date(kw.lastRunAt).getTime()) / 1000))
+              : null;
 
             return (
-              <div key={kw.id} className="bg-zinc-950/40 border border-zinc-900 rounded-xl p-3 flex flex-col justify-center gap-2">
+              <div key={kw.id} className="bg-zinc-950/40 border border-zinc-900 rounded-xl p-3 flex flex-col justify-center gap-1">
                 <div className="flex justify-between items-center text-xs">
                   <span className="font-semibold text-zinc-300 truncate max-w-[150px]">{kw.label}</span>
                   <span className="text-zinc-500 font-mono">
-                    {remaining > 0 ? `dans ${remaining}s` : 'scan imminent'}
+                    {elapsed === null
+                      ? 'en attente du 1er scan'
+                      : elapsed < 60
+                      ? `scanné il y a ${elapsed}s`
+                      : `scanné il y a ${Math.floor(elapsed / 60)}min`}
                   </span>
                 </div>
-                <div className="relative w-full bg-zinc-900 rounded-full h-1.5 overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full transition-all duration-1000 ease-out"
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
+                {kw.countryCodes && kw.countryCodes.length > 0 && (
+                  <span className="text-[10px] text-zinc-600 uppercase tracking-wide font-mono">
+                    {kw.countryCodes.join(' · ')}
+                  </span>
+                )}
               </div>
             );
           })}
@@ -151,13 +158,25 @@ export default function Dashboard() {
       <ScraperStatusBar status={scraperStatus} />
 
       {/* Stats Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
         {[
           {
             label: 'Annonces analysées',
             value: stats?.total_listings ?? '—',
             icon: Database,
             color: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20 glow-indigo',
+          },
+          {
+            label: 'Nouvelles (24h)',
+            value: stats?.listings_24h ?? '—',
+            icon: Sparkles,
+            color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+          },
+          {
+            label: 'Deals validés IA',
+            value: stats?.validated_deals ?? '—',
+            icon: Bot,
+            color: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
           },
           {
             label: 'Mots-clés surveillés',

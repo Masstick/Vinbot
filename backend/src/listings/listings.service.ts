@@ -22,6 +22,15 @@ export interface MarketAvgResult {
   source: 'model' | 'keyword';
 }
 
+// Minimum d'items comparables avant de considérer une moyenne fiable
+const MIN_MODEL_ITEMS = 3;
+const MIN_KEYWORD_ITEMS = 5;
+
+function median(sorted: number[]): number {
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
 @Injectable()
 export class ListingsService {
   constructor(
@@ -33,50 +42,56 @@ export class ListingsService {
     private readonly dataSource: DataSource,
   ) {}
 
-  async computeMarketAvg(keywordId: number, modelLabel?: string | null): Promise<MarketAvgResult> {
-    // Model-specific avg: requires at least 3 data points to be meaningful
+  /**
+   * Médiane des prix des listings comparables, recalculée depuis la DB.
+   * - Si modelLabel : médiane des annonces du même modèle (>= MIN_MODEL_ITEMS).
+   * - Sinon fallback : médiane des 200 dernières annonces du mot-clé (>= MIN_KEYWORD_ITEMS).
+   * excludeListingId évite que le prix de l'annonce notée biaise sa propre moyenne.
+   */
+  async computeMarketAvg(keywordId: number, modelLabel?: string | null, excludeListingId?: number | null): Promise<MarketAvgResult> {
     if (modelLabel) {
-      const mma = await this.modelAvgRepo.findOneBy({ keyword_id: keywordId, model_label: modelLabel });
-      if (mma && mma.avg_price && mma.item_count >= 3) {
-        return { avg: parseFloat(String(mma.avg_price)), itemCount: mma.item_count, source: 'model' };
+      const prices = await this.fetchPrices(keywordId, modelLabel, excludeListingId, 100);
+      if (prices.length >= MIN_MODEL_ITEMS) {
+        return { avg: median(prices), itemCount: prices.length, source: 'model' };
       }
     }
-    // Fallback: P15-P85 trimmed mean across recent keyword listings
-    const rows = await this.listingRepo
+    const prices = await this.fetchPrices(keywordId, null, excludeListingId, 200);
+    if (prices.length < MIN_KEYWORD_ITEMS) return { avg: null, itemCount: prices.length, source: 'keyword' };
+    return { avg: median(prices), itemCount: prices.length, source: 'keyword' };
+  }
+
+  /** Prix triés (croissant) des listings récents d'un mot-clé, optionnellement filtrés par modèle. */
+  private async fetchPrices(keywordId: number, modelLabel: string | null, excludeListingId: number | null | undefined, limit: number): Promise<number[]> {
+    const qb = this.listingRepo
       .createQueryBuilder('l')
       .innerJoin('keyword_listings', 'kl', 'kl.listing_id = l.id AND kl.keyword_id = :kid', { kid: keywordId })
       .select('l.price', 'price')
       .where('l.price IS NOT NULL')
       .orderBy('l.last_seen_at', 'DESC')
-      .limit(200)
-      .getRawMany<{ price: string }>();
-    if (rows.length < 2) return { avg: null, itemCount: rows.length, source: 'keyword' };
-    const prices = rows.map(r => parseFloat(r.price)).filter(p => p > 0.5).sort((a, b) => a - b);
-    if (prices.length === 0) return { avg: null, itemCount: 0, source: 'keyword' };
-    const startIdx = Math.floor(prices.length * 0.15);
-    const endIdx = prices.length - startIdx;
-    const trimmed = prices.slice(startIdx, endIdx || 1);
-    if (trimmed.length === 0) return { avg: null, itemCount: 0, source: 'keyword' };
-    const avg = trimmed.reduce((a, b) => a + b, 0) / trimmed.length;
-    return { avg, itemCount: trimmed.length, source: 'keyword' };
+      .limit(limit);
+    if (modelLabel) qb.andWhere('l.model_label = :ml', { ml: modelLabel });
+    if (excludeListingId) qb.andWhere('l.id != :ex', { ex: excludeListingId });
+    const rows = await qb.getRawMany<{ price: string }>();
+    return rows.map(r => parseFloat(r.price)).filter(p => p > 0.5).sort((a, b) => a - b);
   }
 
-  async updateModelMarketAvg(keywordId: number, modelLabel: string, price: number): Promise<void> {
-    const existing = await this.modelAvgRepo.findOneBy({ keyword_id: keywordId, model_label: modelLabel });
-    if (!existing) {
-      await this.modelAvgRepo.save({ keyword_id: keywordId, model_label: modelLabel, avg_price: price, item_count: 1, last_updated: new Date() });
-      return;
-    }
-    const newCount = existing.item_count + 1;
-    const prevAvg = parseFloat(String(existing.avg_price ?? price));
-    const newAvg = (prevAvg * existing.item_count + price) / newCount;
-    await this.modelAvgRepo.save({ keyword_id: keywordId, model_label: modelLabel, avg_price: newAvg, item_count: newCount, last_updated: new Date() });
+  /** Recalcule depuis la DB et met en cache la médiane du modèle (table model_market_avg). */
+  async updateModelMarketAvg(keywordId: number, modelLabel: string): Promise<void> {
+    const prices = await this.fetchPrices(keywordId, modelLabel, null, 100);
+    if (prices.length === 0) return;
+    await this.modelAvgRepo.save({
+      keyword_id: keywordId,
+      model_label: modelLabel,
+      avg_price: median(prices),
+      item_count: prices.length,
+      last_updated: new Date(),
+    });
   }
 
   async rescoreWithModel(listingId: number, keywordId: number, modelLabel: string, shippingEstimate: number): Promise<{ marketAvg: number | null; itemCount: number; potentialProfit: number | null; dealScore: number | null }> {
     const listing = await this.listingRepo.findOneBy({ id: listingId });
     if (!listing) return { marketAvg: null, itemCount: 0, potentialProfit: null, dealScore: null };
-    const { avg: marketAvg, itemCount } = await this.computeMarketAvg(keywordId, modelLabel);
+    const { avg: marketAvg, itemCount } = await this.computeMarketAvg(keywordId, modelLabel, listingId);
     const price = parseFloat(String(listing.price ?? 0));
     const dealScore = marketAvg ? ((marketAvg - price) / marketAvg) * 100 : null;
     const potentialProfit = marketAvg ? marketAvg - price - shippingEstimate : null;
@@ -151,7 +166,7 @@ export class ListingsService {
         listing.price = item.price;
       }
     }
-    const { avg: marketAvg } = await this.computeMarketAvg(keyword.id, listing.model_label);
+    const { avg: marketAvg } = await this.computeMarketAvg(keyword.id, listing.model_label, listing.id);
     const shippingEst = parseFloat(String(keyword.shipping_estimate)) || 4;
     const dealScore = marketAvg ? ((marketAvg - item.price) / marketAvg) * 100 : null;
     const potentialProfit = marketAvg ? marketAvg - item.price - shippingEst : null;
@@ -221,25 +236,46 @@ export class ListingsService {
   }
 
   async getOpportunities(keywordId?: number, limit = 50): Promise<any[]> {
-    const qb = this.klRepo.createQueryBuilder('kl').innerJoinAndSelect('kl.listing', 'l').innerJoinAndSelect('kl.keyword', 'k').where('kl.potential_profit IS NOT NULL').orderBy('kl.potential_profit', 'DESC').limit(limit);
+    const qb = this.klRepo.createQueryBuilder('kl')
+      .innerJoinAndSelect('kl.listing', 'l')
+      .innerJoinAndSelect('kl.keyword', 'k')
+      .where('kl.potential_profit > 0')
+      // Annonce encore visible lors d'un scan récent : sinon probablement vendue/supprimée
+      .andWhere("l.last_seen_at > NOW() - INTERVAL '24 hours'")
+      .orderBy('kl.potential_profit', 'DESC')
+      .limit(limit);
     if (keywordId) qb.andWhere('kl.keyword_id = :kid', { kid: keywordId });
     return qb.getMany();
   }
 
-  async getListings(keywordId?: number, limit = 100): Promise<any[]> {
-    let sql = `
-      SELECT l.*, kl.deal_score, kl.market_avg, kl.model_market_avg, kl.potential_profit, kl.matched_at,
-        k.label AS keyword_label, k.id AS keyword_id,
-        EXTRACT(EPOCH FROM (NOW() - l.first_seen_at)) / 3600 AS freshness_hours,
-        da.recommendation, da.scam_risk, da.reasoning
-      FROM keyword_listings kl
-      INNER JOIN listings l ON l.id = kl.listing_id
-      INNER JOIN keywords k ON k.id = kl.keyword_id
-      LEFT JOIN deal_analyses da ON da.id = kl.analysis_id
-    `;
+  async getListings(opts: { keywordId?: number; limit?: number; offset?: number; country?: string; q?: string; maxAgeHours?: number } = {}): Promise<any[]> {
+    const limit = Math.min(Math.max(opts.limit ?? 100, 1), 500);
+    const offset = Math.max(opts.offset ?? 0, 0);
     const params: any[] = [];
-    if (keywordId) { params.push(keywordId); sql += ` WHERE kl.keyword_id = $${params.length}`; }
-    sql += ` ORDER BY kl.matched_at DESC LIMIT ${limit}`;
+    const where: string[] = [];
+    if (opts.keywordId) { params.push(opts.keywordId); where.push(`kl.keyword_id = $${params.length}`); }
+    if (opts.country) { params.push(opts.country.toLowerCase()); where.push(`l.country_code = $${params.length}`); }
+    if (opts.q) { params.push(`%${opts.q}%`); where.push(`l.title ILIKE $${params.length}`); }
+    if (opts.maxAgeHours) { params.push(opts.maxAgeHours); where.push(`l.first_seen_at > NOW() - ($${params.length} || ' hours')::interval`); }
+    params.push(limit, offset);
+    // DISTINCT ON : une seule ligne par annonce même si elle matche plusieurs mots-clés
+    const sql = `
+      SELECT * FROM (
+        SELECT DISTINCT ON (l.id)
+          l.*, kl.deal_score, kl.market_avg, kl.model_market_avg, kl.potential_profit, kl.matched_at,
+          k.label AS keyword_label, k.id AS keyword_id,
+          EXTRACT(EPOCH FROM (NOW() - l.first_seen_at)) / 3600 AS freshness_hours,
+          da.recommendation, da.scam_risk, da.reasoning
+        FROM keyword_listings kl
+        INNER JOIN listings l ON l.id = kl.listing_id
+        INNER JOIN keywords k ON k.id = kl.keyword_id
+        LEFT JOIN deal_analyses da ON da.id = kl.analysis_id
+        ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+        ORDER BY l.id, kl.matched_at DESC
+      ) t
+      ORDER BY t.first_seen_at DESC
+      LIMIT $${params.length - 1} OFFSET $${params.length}
+    `;
     return this.dataSource.query(sql, params);
   }
 
@@ -269,11 +305,13 @@ export class ListingsService {
     const totalKeywords = await this.dataSource.query('SELECT COUNT(*) FROM keywords WHERE active = true');
     const recentAlerts = await this.dataSource.query("SELECT COUNT(*) FROM notifications_log WHERE sent_at > NOW() - INTERVAL '24 hours'");
     const validatedDeals = await this.dataSource.query("SELECT COUNT(*) FROM deal_analyses WHERE recommendation IN ('buy','watch') AND scam_risk != 'high'");
+    const newListings24h = await this.dataSource.query("SELECT COUNT(*) FROM listings WHERE first_seen_at > NOW() - INTERVAL '24 hours'");
     return {
       total_listings: totalListings,
       active_keywords: parseInt(totalKeywords[0].count),
       alerts_24h: parseInt(recentAlerts[0].count),
       validated_deals: parseInt(validatedDeals[0].count),
+      listings_24h: parseInt(newListings24h[0].count),
     };
   }
 }

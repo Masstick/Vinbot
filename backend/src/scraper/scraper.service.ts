@@ -209,7 +209,7 @@ export class ScraperService implements OnModuleInit {
     if (!extraction.model_label) return;
 
     await this.listingsService.updateListingModel(item.listingId, extraction.model_label, extraction.confidence);
-    await this.listingsService.updateModelMarketAvg(item.keywordId, extraction.model_label, item.price);
+    await this.listingsService.updateModelMarketAvg(item.keywordId, extraction.model_label);
 
     const { marketAvg, itemCount, potentialProfit } = await this.listingsService.rescoreWithModel(
       item.listingId, item.keywordId, extraction.model_label, item.shippingEstimate,
