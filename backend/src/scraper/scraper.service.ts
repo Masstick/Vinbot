@@ -49,7 +49,6 @@ interface AnalysisQueueItem {
 interface SellerCheckItem {
   sellerId: number;
   keywordId: number;
-  searchText: string;
   countryCode: string;
 }
 
@@ -143,7 +142,7 @@ export class ScraperService implements OnModuleInit {
     if (last && Date.now() - last < SELLER_CHECK_TTL_MS) return;
     this.sellerCheckInFlight.add(key);
     this.sellerQueue
-      .push({ sellerId, keywordId: keyword.id, searchText: keyword.search_text, countryCode })
+      .push({ sellerId, keywordId: keyword.id, countryCode })
       .catch(() => {});
   }
 
@@ -151,9 +150,12 @@ export class ScraperService implements OnModuleInit {
     const key = `${item.keywordId}:${item.sellerId}`;
     try {
       const client = this.clientPool.getClient(item.countryCode);
-      const count = await client.countSellerItemsMatching(item.sellerId, item.searchText);
-      if (count !== null) {
-        await this.listingsService.updateSellerItemCount(item.keywordId, item.sellerId, count);
+      const profile = await client.getSellerProfile(item.sellerId);
+      if (profile !== null) {
+        if (profile.countryIso) {
+          await this.listingsService.updateSellerCountry(item.sellerId, profile.countryIso);
+        }
+        await this.listingsService.updateSellerItemCount(item.keywordId, item.sellerId, profile.itemCount);
         this.sellerCheckedAt.set(key, Date.now());
       }
     } catch (err: any) {

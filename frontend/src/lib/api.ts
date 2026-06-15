@@ -44,8 +44,10 @@ export interface Listing {
   vinted_created_at?: string | null;
   /** Derived server-side or computed client-side from first_seen_at */
   freshness_hours?: number;
-  /** ISO country code of the seller's country, e.g. "fr", "be", "es" */
+  /** ISO code of the scraped marketplace domain, e.g. "fr", "be", "es" */
   country_code?: string;
+  /** Real ISO country of the seller (from their Vinted profile). Preferred over country_code. */
+  seller_country?: string;
   /** Short reasoning text from AI deal analysis (deal_analyses join) */
   reasoning?: string;
 }
@@ -124,6 +126,7 @@ function rowToKeywordListing(row: any): KeywordListing {
       last_seen_at: row.last_seen_at ?? row.first_seen_at,
       freshness_hours: row.freshness_hours != null ? parseFloat(String(row.freshness_hours)) : undefined,
       country_code: row.country_code ?? undefined,
+      seller_country: row.seller_country ?? undefined,
       reasoning: row.reasoning ?? undefined,
     },
   };

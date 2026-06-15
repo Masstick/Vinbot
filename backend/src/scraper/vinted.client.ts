@@ -135,36 +135,32 @@ export class VintedClient {
   }
 
   /**
-   * Compte les annonces actives du profil d'un vendeur dont le titre correspond
-   * au mot-clé. Sert au filtre "vendeur unique" : un vendeur occasionnel n'a
-   * qu'une seule annonce sur ce thème, un pro en a plusieurs.
-   * Retourne null en cas d'erreur (on ne pollue pas le cache avec un faux 0).
+   * Récupère le profil public d'un vendeur : pays réel (ISO) et nombre d'articles
+   * actifs. Le pays sert au filtre pays (country_code ne stockait que le domaine
+   * scrapé) ; itemCount sert au filtre "vendeur unique".
+   * Retourne null en cas d'erreur (on ne pollue pas le cache).
    */
-  async countSellerItemsMatching(sellerId: number, searchText: string): Promise<number | null> {
+  async getSellerProfile(sellerId: number): Promise<{ countryIso: string | null; itemCount: number } | null> {
     await this.initSession();
     try {
-      // /wardrobe/{id}/items renvoie le JSON du dressing ; /users/{id}/items tombe
-      // sur la page anti-bot HTML (→ faux 404).
-      // per_page=96 (max) : avec 20, les articles correspondants situés plus loin
-      // dans le dressing étaient ratés → vendeurs pro comptés à tort comme uniques.
-      // Au-delà de 96 articles le vendeur est de toute façon clairement un pro.
-      const response = await this.client.get(`${this.baseUrl}/api/v2/wardrobe/${sellerId}/items`, {
-        params: { per_page: 96, page: 1, order: 'newest_first' },
+      const response = await this.client.get(`${this.baseUrl}/api/v2/users/${sellerId}`, {
         headers: {
           Accept: 'application/json, text/plain, */*',
           Referer: `${this.baseUrl}/member/${sellerId}`,
         },
         timeout: 15000,
       });
-      const rawItems: any[] = response.data?.items ?? [];
-      return this.filterByTitle(rawItems, searchText).length;
+      const u = response.data?.user ?? response.data ?? {};
+      const countryIso = typeof u.country_iso_code === 'string' ? u.country_iso_code.toLowerCase() : null;
+      const itemCount = Number(u.item_count ?? u.total_items_count ?? 0) || 0;
+      return { countryIso, itemCount };
     } catch (err: any) {
       if (err.response?.status === 403) {
         this.logger.warn(`Vinted 403 [${this.countryCode}] profil ${sellerId} — reset session`);
         this.resetSession();
         throw new Error('BANNED');
       }
-      this.logger.warn(`Erreur countSellerItems [${this.countryCode}] user ${sellerId}: ${err.message}`);
+      this.logger.warn(`Erreur getSellerProfile [${this.countryCode}] user ${sellerId}: ${err.message}`);
       return null;
     }
   }

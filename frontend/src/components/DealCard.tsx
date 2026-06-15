@@ -159,7 +159,8 @@ export function DealCard({ kl }: Props) {
   const score = deal_score ? parseFloat(String(deal_score)) : null;
 
   const freshnessHours = getFreshnessHours(listing);
-  const flag = listing.country_code ? countryFlag(listing.country_code) : null;
+  const flagCode = listing.seller_country ?? listing.country_code;
+  const flag = flagCode ? countryFlag(flagCode) : null;
 
   return (
     <div className="group bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden hover:border-zinc-700/80 hover:shadow-xl transition-all duration-300 hover:scale-[1.01] flex flex-col h-full">

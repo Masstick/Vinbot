@@ -45,7 +45,7 @@ describe('VintedClient.filterByTitle', () => {
   });
 });
 
-describe('VintedClient.countSellerItemsMatching', () => {
+describe('VintedClient.getSellerProfile', () => {
   function clientWithGet(get: jest.Mock) {
     const client = new VintedClient('fr');
     (client as any).sessionReady = true;
@@ -54,30 +54,32 @@ describe('VintedClient.countSellerItemsMatching', () => {
     return client;
   }
 
-  it('counts only the seller items matching the keyword tokens', async () => {
+  it('extracts the lowercased ISO country and item count from the profile', async () => {
     const get = jest.fn().mockResolvedValue({
-      data: { items: [
-        { title: 'Carte Pokémon Dracaufeu' },
-        { title: 'Carte Pokémon Pikachu' },
-        { title: 'Pantalon Levis' },
-      ] },
+      data: { user: { country_iso_code: 'ES', item_count: 7, total_items_count: 9 } },
     });
     const client = clientWithGet(get);
-    const count = await client.countSellerItemsMatching(42, 'pokémon');
-    expect(count).toBe(2);
+    const profile = await client.getSellerProfile(42);
+    expect(profile).toEqual({ countryIso: 'es', itemCount: 7 });
+  });
+
+  it('falls back to total_items_count and null country when fields are missing', async () => {
+    const get = jest.fn().mockResolvedValue({ data: { user: { total_items_count: 3 } } });
+    const client = clientWithGet(get);
+    const profile = await client.getSellerProfile(42);
+    expect(profile).toEqual({ countryIso: null, itemCount: 3 });
   });
 
   it('returns null on HTTP error (so the cache is not poisoned)', async () => {
     const get = jest.fn().mockRejectedValue(new Error('network'));
     const client = clientWithGet(get);
-    const count = await client.countSellerItemsMatching(42, 'pokémon');
-    expect(count).toBeNull();
+    expect(await client.getSellerProfile(42)).toBeNull();
   });
 
   it('throws BANNED on 403', async () => {
     const get = jest.fn().mockRejectedValue({ response: { status: 403 }, message: 'forbidden' });
     const client = clientWithGet(get);
-    await expect(client.countSellerItemsMatching(42, 'pokémon')).rejects.toThrow('BANNED');
+    await expect(client.getSellerProfile(42)).rejects.toThrow('BANNED');
   });
 });
 

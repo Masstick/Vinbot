@@ -38,6 +38,10 @@ export class Listing {
   @Column({ type: 'varchar', length: 5, nullable: true, default: 'fr' })
   country_code: string | null;
 
+  /** Pays réel du vendeur (ISO, depuis son profil Vinted). Null tant que non vérifié. */
+  @Column({ type: 'varchar', length: 5, nullable: true })
+  seller_country: string | null;
+
   @Column({ type: 'int', nullable: true })
   view_count: number | null;
 

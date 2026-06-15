@@ -152,6 +152,14 @@ export class ListingsService {
     );
   }
 
+  /** Renseigne le pays réel du vendeur sur toutes ses annonces (indépendant du mot-clé). */
+  async updateSellerCountry(sellerId: number, countryIso: string): Promise<void> {
+    await this.dataSource.query(
+      `UPDATE listings SET seller_country = $2 WHERE seller_id = $1`,
+      [sellerId, countryIso],
+    );
+  }
+
   async getListingsWithoutModel(limit = 200): Promise<Array<{ listing: Listing; keywordId: number; shippingEstimate: number; targetMargin: number }>> {
     const rows = await this.dataSource.query<Array<{ id: number; keyword_id: number; shipping_estimate: string; target_margin: string }>>(
       `SELECT DISTINCT ON (l.id) l.id, kl.keyword_id, k.shipping_estimate, k.target_margin
@@ -283,7 +291,9 @@ export class ListingsService {
     const params: any[] = [];
     const where: string[] = [];
     if (opts.keywordId) { params.push(opts.keywordId); where.push(`kl.keyword_id = $${params.length}`); }
-    if (opts.country) { params.push(opts.country.toLowerCase()); where.push(`l.country_code = $${params.length}`); }
+    // On filtre sur le pays réel du vendeur (seller_country) quand il est connu,
+    // sinon on retombe sur le domaine scrapé (country_code).
+    if (opts.country) { params.push(opts.country.toLowerCase()); where.push(`LOWER(COALESCE(l.seller_country, l.country_code)) = $${params.length}`); }
     if (opts.q) { params.push(`%${opts.q}%`); where.push(`l.title ILIKE $${params.length}`); }
     if (opts.maxAgeHours) { params.push(opts.maxAgeHours); where.push(`l.first_seen_at > NOW() - ($${params.length} || ' hours')::interval`); }
     if (opts.soloSeller) {
