@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { api, KeywordListing, Keyword } from '@/lib/api';
 import { DealCard } from '@/components/DealCard';
-import { Newspaper, Filter, Search, Clock, Globe, RefreshCw, ChevronDown } from 'lucide-react';
+import { Newspaper, Filter, Search, Clock, Globe, RefreshCw, ChevronDown, UserCheck } from 'lucide-react';
 import { useKeywordChanged } from '@/lib/useKeywordChanged';
 
 const PAGE_SIZE = 48;
@@ -40,6 +40,7 @@ export default function LatestListingsPage() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [maxAgeHours, setMaxAgeHours] = useState<number | undefined>();
+  const [soloSeller, setSoloSeller] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
@@ -60,8 +61,9 @@ export default function LatestListingsPage() {
     country: country || undefined,
     q: debouncedSearch || undefined,
     maxAgeHours,
+    soloSeller: soloSeller || undefined,
     limit: PAGE_SIZE,
-  }), [selectedKw, country, debouncedSearch, maxAgeHours]);
+  }), [selectedKw, country, debouncedSearch, maxAgeHours, soloSeller]);
 
   const load = useCallback((showSpinner: boolean) => {
     if (showSpinner) setLoading(true);
@@ -197,6 +199,21 @@ export default function LatestListingsPage() {
             <option value="24">Moins de 24h</option>
             <option value="168">Moins de 7 jours</option>
           </select>
+        </div>
+
+        {/* Solo seller toggle */}
+        <div className="w-full sm:w-auto flex items-end">
+          <button
+            onClick={() => setSoloSeller(v => !v)}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${
+              soloSeller
+                ? 'bg-indigo-500/10 border-indigo-500 text-indigo-300'
+                : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-600'
+            }`}
+          >
+            <UserCheck size={14} />
+            Vendeur unique
+          </button>
         </div>
 
         {/* Results count */}
