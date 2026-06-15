@@ -13,27 +13,42 @@ Add a toggle filter on the listings page that shows only listings where the sell
 
 ## Architecture
 
-### Backend — `ListingsService.getListings()`
+> **Révision (2026-06-15)** : l'approche initiale comptait les annonces présentes
+> dans *notre* DB. C'est faussé — on ne connaît que ce qu'on a scrapé (souvent la
+> page 1 d'un mot-clé), donc un pro passait à travers. La détection se fait
+> désormais sur le **profil Vinted réel du vendeur**, mis en cache.
 
-Add a `soloSeller?: boolean` option to the existing `opts` parameter of `getListings()` in `backend/src/listings/listings.service.ts`.
+### Détection — profil vendeur, vérifié en arrière-plan
 
-When `soloSeller` is `true`, inject the following condition into the WHERE clause:
+`VintedClient.countSellerItemsMatching(sellerId, searchText)` interroge
+`GET /api/v2/users/{id}/items` et compte les annonces actives du vendeur dont le
+titre matche les tokens du mot-clé (réutilise `filterByTitle`). Retourne `null`
+en cas d'erreur pour ne pas polluer le cache.
+
+Le scraper (`ScraperService`) programme ces vérifications via une `AsyncQueue`
+throttlée à 1/sec (`sellerQueue`), dédupliquée par `${keywordId}:${sellerId}`
+avec un TTL de 6h — une vérif profil sert toutes les annonces du vendeur pour ce
+mot-clé. Un appel live par annonce affichée serait impossible (48 req → ban).
+
+### Stockage — `keyword_listings`
+
+Deux colonnes (migration `003_add_seller_item_count.sql`) :
+- `seller_item_count INTEGER` — nb d'annonces du vendeur matchant le mot-clé. `NULL` = pas encore vérifié.
+- `seller_checked_at TIMESTAMPTZ` — horodatage de la dernière vérif.
+
+`ListingsService.updateSellerItemCount(keywordId, sellerId, count)` propage le
+compte sur toutes les `keyword_listings` du vendeur pour ce mot-clé.
+
+### Filtre — `ListingsService.getListings()`
+
+Avec `soloSeller = true` :
 
 ```sql
-AND l.seller_id NOT IN (
-  SELECT l2.seller_id
-  FROM listings l2
-  INNER JOIN keyword_listings kl2 ON kl2.listing_id = l2.id
-  WHERE kl2.keyword_id = kl.keyword_id
-    AND l2.last_seen_at > NOW() - INTERVAL '24 hours'
-  GROUP BY l2.seller_id
-  HAVING COUNT(*) > 1
-)
+AND kl.seller_item_count IS NOT NULL AND kl.seller_item_count <= 1
 ```
 
-"Active" is defined as `last_seen_at > NOW() - 24h`, consistent with `getOpportunities()`.
-
-When no `keywordId` filter is provided, the subquery uses `kl.keyword_id` (the join column), so the filter applies per-keyword correctly.
+`NULL` (non vérifié) est exclu : on n'affiche que des vendeurs uniques **confirmés**.
+Les annonces fraîchement scrapées apparaissent dès que la file les a traitées.
 
 ### Backend — `ListingsController`
 

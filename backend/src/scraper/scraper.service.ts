@@ -21,6 +21,10 @@ const AI_DEAL_SCORE_THRESHOLD = 40; // % sous la médiane
 const AI_MIN_MARKET_ITEMS = 10; // échantillon mini pour faire confiance au score
 const AI_MIN_PRICE = 3; // ignore les babioles à quelques centimes
 
+// Vérification du profil vendeur (filtre "vendeur unique") : on ne re-vérifie pas
+// un même vendeur/mot-clé plus d'une fois par fenêtre, pour limiter les appels Vinted.
+const SELLER_CHECK_TTL_MS = 6 * 60 * 60 * 1000; // 6h
+
 function randInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
@@ -42,6 +46,13 @@ interface AnalysisQueueItem {
   itemCount: number;
 }
 
+interface SellerCheckItem {
+  sellerId: number;
+  keywordId: number;
+  searchText: string;
+  countryCode: string;
+}
+
 @Injectable()
 export class ScraperService implements OnModuleInit {
   private readonly logger = new Logger(ScraperService.name);
@@ -55,6 +66,10 @@ export class ScraperService implements OnModuleInit {
 
   private readonly modelQueue: AsyncQueue<ModelQueueItem>;
   private readonly analysisQueue: AsyncQueue<AnalysisQueueItem>;
+  private readonly sellerQueue: AsyncQueue<SellerCheckItem>;
+  // Dédup : `${keywordId}:${sellerId}` en cours de vérif / dernière vérif (epoch ms)
+  private readonly sellerCheckInFlight = new Set<string>();
+  private readonly sellerCheckedAt = new Map<string, number>();
 
   constructor(
     private readonly keywordsService: KeywordsService,
@@ -65,6 +80,8 @@ export class ScraperService implements OnModuleInit {
   ) {
     this.modelQueue = new AsyncQueue(this.processModelExtraction.bind(this), 1, 1);
     this.analysisQueue = new AsyncQueue(this.processDealAnalysis.bind(this), 1, 3);
+    // 1 vérif/sec max : la vérification profil est secondaire, on ménage Vinted.
+    this.sellerQueue = new AsyncQueue(this.processSellerCheck.bind(this), 1, 1);
   }
 
   onModuleInit() {
@@ -115,6 +132,40 @@ export class ScraperService implements OnModuleInit {
       targetMargin: parseFloat(String(keyword.target_margin)) || 10,
       keyword,
     }).catch(() => {});
+  }
+
+  /** Programme une vérif du profil vendeur (dédupliquée + TTL) pour le filtre "vendeur unique". */
+  private queueSellerCheck(sellerId: number | null | undefined, keyword: Keyword, countryCode: string): void {
+    if (!sellerId) return;
+    const key = `${keyword.id}:${sellerId}`;
+    if (this.sellerCheckInFlight.has(key)) return;
+    const last = this.sellerCheckedAt.get(key);
+    if (last && Date.now() - last < SELLER_CHECK_TTL_MS) return;
+    this.sellerCheckInFlight.add(key);
+    this.sellerQueue
+      .push({ sellerId, keywordId: keyword.id, searchText: keyword.search_text, countryCode })
+      .catch(() => {});
+  }
+
+  private async processSellerCheck(item: SellerCheckItem): Promise<void> {
+    const key = `${item.keywordId}:${item.sellerId}`;
+    try {
+      const client = this.clientPool.getClient(item.countryCode);
+      const count = await client.countSellerItemsMatching(item.sellerId, item.searchText);
+      if (count !== null) {
+        await this.listingsService.updateSellerItemCount(item.keywordId, item.sellerId, count);
+        this.sellerCheckedAt.set(key, Date.now());
+      }
+    } catch (err: any) {
+      if (err.message === 'BANNED') {
+        this.logger.warn('[SellerCheck] bloqué par Vinted — pause 60s');
+        await this.delay(60_000);
+      } else {
+        this.logger.warn(`[SellerCheck] vendeur ${item.sellerId}: ${err.message}`);
+      }
+    } finally {
+      this.sellerCheckInFlight.delete(key);
+    }
   }
 
   /**
@@ -183,6 +234,9 @@ export class ScraperService implements OnModuleInit {
           for (const item of items) {
             const { listing, isNew, priceChanged, dealScore, potentialProfit, marketAvg, marketItemCount } =
               await this.listingsService.upsertListing(item, keyword, countryCode);
+
+            // Filtre "vendeur unique" : on vérifie le profil du vendeur en arrière-plan.
+            this.queueSellerCheck(item.seller_id, keyword, countryCode);
 
             if (isNew) {
               this.dealsGateway.emitNewListing({
@@ -361,6 +415,7 @@ export class ScraperService implements OnModuleInit {
       queueStats: {
         model: this.modelQueue.getStats(),
         analysis: this.analysisQueue.getStats(),
+        seller: this.sellerQueue.getStats(),
       },
       keywords: keywords.map(kw => ({
         id: kw.id,

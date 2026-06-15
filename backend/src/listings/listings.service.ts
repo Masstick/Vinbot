@@ -128,6 +128,20 @@ export class ListingsService {
     return this.klRepo.countBy({ keyword_id: keywordId });
   }
 
+  /**
+   * Met en cache le nb d'annonces du vendeur correspondant au mot-clé, sur toutes
+   * les annonces de ce vendeur pour ce mot-clé (une vérif profil sert plusieurs annonces).
+   */
+  async updateSellerItemCount(keywordId: number, sellerId: number, count: number): Promise<void> {
+    await this.dataSource.query(
+      `UPDATE keyword_listings kl
+       SET seller_item_count = $3, seller_checked_at = NOW()
+       FROM listings l
+       WHERE kl.listing_id = l.id AND kl.keyword_id = $1 AND l.seller_id = $2`,
+      [keywordId, sellerId, count],
+    );
+  }
+
   async getListingsWithoutModel(limit = 200): Promise<Array<{ listing: Listing; keywordId: number; shippingEstimate: number; targetMargin: number }>> {
     const rows = await this.dataSource.query<Array<{ id: number; keyword_id: number; shipping_estimate: string; target_margin: string }>>(
       `SELECT DISTINCT ON (l.id) l.id, kl.keyword_id, k.shipping_estimate, k.target_margin
@@ -263,15 +277,10 @@ export class ListingsService {
     if (opts.q) { params.push(`%${opts.q}%`); where.push(`l.title ILIKE $${params.length}`); }
     if (opts.maxAgeHours) { params.push(opts.maxAgeHours); where.push(`l.first_seen_at > NOW() - ($${params.length} || ' hours')::interval`); }
     if (opts.soloSeller) {
-      // IS NULL OR : les annonces sans seller_id passent (on ne peut pas les identifier comme pro).
-      // Vérification globale (tous keywords) : un vendeur avec >1 annonce récente = pro.
-      where.push(`(l.seller_id IS NULL OR l.seller_id NOT IN (
-        SELECT seller_id FROM listings
-        WHERE last_seen_at > NOW() - INTERVAL '24 hours'
-          AND seller_id IS NOT NULL
-        GROUP BY seller_id
-        HAVING COUNT(DISTINCT id) > 1
-      ))`);
+      // "Vendeur unique" : le profil Vinted du vendeur ne contient qu'une seule
+      // annonce active correspondant au mot-clé (compte rafraîchi en arrière-plan
+      // par le scraper via countSellerItemsMatching). NULL = pas encore vérifié → exclu.
+      where.push(`kl.seller_item_count IS NOT NULL AND kl.seller_item_count <= 1`);
     }
     params.push(limit, offset);
     // DISTINCT ON : une seule ligne par annonce même si elle matche plusieurs mots-clés
@@ -279,6 +288,7 @@ export class ListingsService {
       SELECT * FROM (
         SELECT DISTINCT ON (l.id)
           l.*, kl.deal_score, kl.market_avg, kl.model_market_avg, kl.potential_profit, kl.matched_at,
+          kl.seller_item_count,
           k.label AS keyword_label, k.id AS keyword_id,
           EXTRACT(EPOCH FROM (NOW() - l.first_seen_at)) / 3600 AS freshness_hours,
           da.recommendation, da.scam_risk, da.reasoning

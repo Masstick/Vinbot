@@ -35,4 +35,11 @@ export class KeywordListing {
 
   @Column({ type: 'int', nullable: true })
   analysis_id: number | null;
+
+  /** Nb d'annonces actives du vendeur correspondant au mot-clé (profil Vinted). Null = pas encore vérifié. */
+  @Column({ type: 'int', nullable: true })
+  seller_item_count: number | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  seller_checked_at: Date | null;
 }

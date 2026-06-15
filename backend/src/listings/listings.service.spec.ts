@@ -140,9 +140,8 @@ describe('ListingsService', () => {
 
       expect(queryMock).toHaveBeenCalledTimes(1);
       const sql: string = queryMock.mock.calls[0][0];
-      expect(sql).toContain('seller_id IS NOT NULL');
-      expect(sql).toContain('seller_id NOT IN');
-      expect(sql).toContain('HAVING COUNT(DISTINCT l2.id) > 1');
+      expect(sql).toContain('kl.seller_item_count IS NOT NULL');
+      expect(sql).toContain('kl.seller_item_count <= 1');
     });
 
     it('omits solo_seller subquery when soloSeller=false', async () => {
@@ -163,7 +162,7 @@ describe('ListingsService', () => {
       await svc.getListings({ keywordId: 3, soloSeller: false });
 
       const sql: string = queryMock.mock.calls[0][0];
-      expect(sql).not.toContain('seller_id NOT IN');
+      expect(sql).not.toContain('seller_item_count IS NOT NULL');
     });
   });
 });

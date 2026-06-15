@@ -45,6 +45,42 @@ describe('VintedClient.filterByTitle', () => {
   });
 });
 
+describe('VintedClient.countSellerItemsMatching', () => {
+  function clientWithGet(get: jest.Mock) {
+    const client = new VintedClient('fr');
+    (client as any).sessionReady = true;
+    (client as any).lastSessionInit = Date.now();
+    (client as any).client = { get };
+    return client;
+  }
+
+  it('counts only the seller items matching the keyword tokens', async () => {
+    const get = jest.fn().mockResolvedValue({
+      data: { items: [
+        { title: 'Carte Pokémon Dracaufeu' },
+        { title: 'Carte Pokémon Pikachu' },
+        { title: 'Pantalon Levis' },
+      ] },
+    });
+    const client = clientWithGet(get);
+    const count = await client.countSellerItemsMatching(42, 'pokémon');
+    expect(count).toBe(2);
+  });
+
+  it('returns null on HTTP error (so the cache is not poisoned)', async () => {
+    const get = jest.fn().mockRejectedValue(new Error('network'));
+    const client = clientWithGet(get);
+    const count = await client.countSellerItemsMatching(42, 'pokémon');
+    expect(count).toBeNull();
+  });
+
+  it('throws BANNED on 403', async () => {
+    const get = jest.fn().mockRejectedValue({ response: { status: 403 }, message: 'forbidden' });
+    const client = clientWithGet(get);
+    await expect(client.countSellerItemsMatching(42, 'pokémon')).rejects.toThrow('BANNED');
+  });
+});
+
 describe('VintedClient.parseItem', () => {
   const client = new VintedClient('fr');
 

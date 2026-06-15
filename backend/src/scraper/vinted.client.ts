@@ -134,6 +134,36 @@ export class VintedClient {
     }
   }
 
+  /**
+   * Compte les annonces actives du profil d'un vendeur dont le titre correspond
+   * au mot-clé. Sert au filtre "vendeur unique" : un vendeur occasionnel n'a
+   * qu'une seule annonce sur ce thème, un pro en a plusieurs.
+   * Retourne null en cas d'erreur (on ne pollue pas le cache avec un faux 0).
+   */
+  async countSellerItemsMatching(sellerId: number, searchText: string): Promise<number | null> {
+    await this.initSession();
+    try {
+      const response = await this.client.get(`${this.baseUrl}/api/v2/users/${sellerId}/items`, {
+        params: { per_page: 20, page: 1, order: 'relevance' },
+        headers: {
+          Accept: 'application/json, text/plain, */*',
+          Referer: `${this.baseUrl}/member/${sellerId}`,
+        },
+        timeout: 15000,
+      });
+      const rawItems: any[] = response.data?.items ?? [];
+      return this.filterByTitle(rawItems, searchText).length;
+    } catch (err: any) {
+      if (err.response?.status === 403) {
+        this.logger.warn(`Vinted 403 [${this.countryCode}] profil ${sellerId} — reset session`);
+        this.resetSession();
+        throw new Error('BANNED');
+      }
+      this.logger.warn(`Erreur countSellerItems [${this.countryCode}] user ${sellerId}: ${err.message}`);
+      return null;
+    }
+  }
+
   private filterByTitle(items: any[], searchText: string): any[] {
     const tokens = searchText
       .toLowerCase()
