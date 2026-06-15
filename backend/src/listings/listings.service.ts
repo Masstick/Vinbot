@@ -253,7 +253,7 @@ export class ListingsService {
     return qb.getMany();
   }
 
-  async getListings(opts: { keywordId?: number; limit?: number; offset?: number; country?: string; q?: string; maxAgeHours?: number } = {}): Promise<any[]> {
+  async getListings(opts: { keywordId?: number; limit?: number; offset?: number; country?: string; q?: string; maxAgeHours?: number; soloSeller?: boolean } = {}): Promise<any[]> {
     const limit = Math.min(Math.max(opts.limit ?? 100, 1), 500);
     const offset = Math.max(opts.offset ?? 0, 0);
     const params: any[] = [];
@@ -262,6 +262,17 @@ export class ListingsService {
     if (opts.country) { params.push(opts.country.toLowerCase()); where.push(`l.country_code = $${params.length}`); }
     if (opts.q) { params.push(`%${opts.q}%`); where.push(`l.title ILIKE $${params.length}`); }
     if (opts.maxAgeHours) { params.push(opts.maxAgeHours); where.push(`l.first_seen_at > NOW() - ($${params.length} || ' hours')::interval`); }
+    if (opts.soloSeller) {
+      where.push(`l.seller_id NOT IN (
+      SELECT l2.seller_id
+      FROM listings l2
+      INNER JOIN keyword_listings kl2 ON kl2.listing_id = l2.id
+      WHERE kl2.keyword_id = kl.keyword_id
+        AND l2.last_seen_at > NOW() - INTERVAL '24 hours'
+      GROUP BY l2.seller_id
+      HAVING COUNT(*) > 1
+    )`);
+    }
     params.push(limit, offset);
     // DISTINCT ON : une seule ligne par annonce même si elle matche plusieurs mots-clés
     const sql = `

@@ -119,4 +119,50 @@ describe('ListingsService', () => {
       expect(modelAvgRepo.save).not.toHaveBeenCalled();
     });
   });
+
+  describe('getListings', () => {
+    it('includes solo_seller subquery when soloSeller=true', async () => {
+      const queryMock = jest.fn().mockResolvedValue([]);
+      const module = await Test.createTestingModule({
+        providers: [
+          ListingsService,
+          { provide: getRepositoryToken(Listing), useValue: mockRepo() },
+          { provide: getRepositoryToken(KeywordListing), useValue: mockRepo() },
+          { provide: getRepositoryToken(PriceHistory), useValue: mockRepo() },
+          { provide: getRepositoryToken(ModelMarketAvg), useValue: mockRepo() },
+          { provide: getRepositoryToken(DealAnalysis), useValue: mockRepo() },
+          { provide: DataSource, useValue: { query: queryMock } },
+        ],
+      }).compile();
+      const svc = module.get(ListingsService);
+
+      await svc.getListings({ keywordId: 3, soloSeller: true });
+
+      expect(queryMock).toHaveBeenCalledTimes(1);
+      const sql: string = queryMock.mock.calls[0][0];
+      expect(sql).toContain('seller_id NOT IN');
+      expect(sql).toContain('HAVING COUNT(*) > 1');
+    });
+
+    it('omits solo_seller subquery when soloSeller=false', async () => {
+      const queryMock = jest.fn().mockResolvedValue([]);
+      const module = await Test.createTestingModule({
+        providers: [
+          ListingsService,
+          { provide: getRepositoryToken(Listing), useValue: mockRepo() },
+          { provide: getRepositoryToken(KeywordListing), useValue: mockRepo() },
+          { provide: getRepositoryToken(PriceHistory), useValue: mockRepo() },
+          { provide: getRepositoryToken(ModelMarketAvg), useValue: mockRepo() },
+          { provide: getRepositoryToken(DealAnalysis), useValue: mockRepo() },
+          { provide: DataSource, useValue: { query: queryMock } },
+        ],
+      }).compile();
+      const svc = module.get(ListingsService);
+
+      await svc.getListings({ keywordId: 3, soloSeller: false });
+
+      const sql: string = queryMock.mock.calls[0][0];
+      expect(sql).not.toContain('seller_id NOT IN');
+    });
+  });
 });
