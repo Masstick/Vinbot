@@ -263,15 +263,15 @@ export class ListingsService {
     if (opts.q) { params.push(`%${opts.q}%`); where.push(`l.title ILIKE $${params.length}`); }
     if (opts.maxAgeHours) { params.push(opts.maxAgeHours); where.push(`l.first_seen_at > NOW() - ($${params.length} || ' hours')::interval`); }
     if (opts.soloSeller) {
-      // Vérification globale (sans filtrage par keyword) : un vendeur pro a >1 annonce
-      // dans toute la DB récente, quelle que soit la répartition entre keywords.
-      where.push(`l.seller_id NOT IN (
+      // IS NULL OR : les annonces sans seller_id passent (on ne peut pas les identifier comme pro).
+      // Vérification globale (tous keywords) : un vendeur avec >1 annonce récente = pro.
+      where.push(`(l.seller_id IS NULL OR l.seller_id NOT IN (
         SELECT seller_id FROM listings
         WHERE last_seen_at > NOW() - INTERVAL '24 hours'
           AND seller_id IS NOT NULL
         GROUP BY seller_id
         HAVING COUNT(DISTINCT id) > 1
-      )`);
+      ))`);
     }
     params.push(limit, offset);
     // DISTINCT ON : une seule ligne par annonce même si elle matche plusieurs mots-clés
