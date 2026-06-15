@@ -88,6 +88,7 @@ export interface LatestListingsParams {
   country?: string;
   q?: string;
   maxAgeHours?: number;
+  soloSeller?: boolean;
 }
 
 /**
@@ -136,6 +137,7 @@ function latestQuery(p: LatestListingsParams): string {
   if (p.country) qs.set('country', p.country);
   if (p.q) qs.set('q', p.q);
   if (p.maxAgeHours) qs.set('max_age_hours', String(p.maxAgeHours));
+  if (p.soloSeller) qs.set('solo_seller', '1');
   const s = qs.toString();
   return s ? `?${s}` : '';
 }
