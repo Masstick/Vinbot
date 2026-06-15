@@ -45,6 +45,7 @@ export default function LatestListingsPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const offsetRef = useRef(0);
+  const loadTickRef = useRef(0);
 
   useEffect(() => {
     api.keywords.list().then(setKeywords).catch(() => {});
@@ -67,14 +68,16 @@ export default function LatestListingsPage() {
 
   const load = useCallback((showSpinner: boolean) => {
     if (showSpinner) setLoading(true);
+    const ticket = ++loadTickRef.current;
     api.listings.latest({ ...baseParams(), offset: 0 })
       .then(rows => {
+        if (ticket !== loadTickRef.current) return;
         offsetRef.current = rows.length;
         setItems(rows);
         setHasMore(rows.length === PAGE_SIZE);
       })
-      .catch(() => setItems([]))
-      .finally(() => setLoading(false));
+      .catch(() => { if (ticket === loadTickRef.current) setItems([]); })
+      .finally(() => { if (ticket === loadTickRef.current) setLoading(false); });
   }, [baseParams]);
 
   // Chargement initial + à chaque changement de filtre
