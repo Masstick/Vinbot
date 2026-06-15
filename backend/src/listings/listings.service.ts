@@ -31,6 +31,16 @@ function median(sorted: number[]): number {
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
+/**
+ * deal_score est stocké en DECIMAL(5,2) (±999.99). Une annonce très surévaluée
+ * produit un score très négatif (ex. -44900) → débordement numérique en base.
+ * On borne à la plage stockable.
+ */
+function clampDealScore(score: number | null): number | null {
+  if (score === null) return null;
+  return Math.max(-999.99, Math.min(999.99, score));
+}
+
 @Injectable()
 export class ListingsService {
   constructor(
@@ -93,7 +103,7 @@ export class ListingsService {
     if (!listing) return { marketAvg: null, itemCount: 0, potentialProfit: null, dealScore: null };
     const { avg: marketAvg, itemCount } = await this.computeMarketAvg(keywordId, modelLabel, listingId);
     const price = parseFloat(String(listing.price ?? 0));
-    const dealScore = marketAvg ? ((marketAvg - price) / marketAvg) * 100 : null;
+    const dealScore = clampDealScore(marketAvg ? ((marketAvg - price) / marketAvg) * 100 : null);
     const potentialProfit = marketAvg ? marketAvg - price - shippingEstimate : null;
     await this.klRepo.upsert(
       { keyword_id: keywordId, listing_id: listingId, deal_score: dealScore, market_avg: marketAvg, model_market_avg: marketAvg, potential_profit: potentialProfit, matched_at: new Date() },
@@ -187,7 +197,7 @@ export class ListingsService {
     }
     const { avg: marketAvg, itemCount: marketItemCount } = await this.computeMarketAvg(keyword.id, listing.model_label, listing.id);
     const shippingEst = parseFloat(String(keyword.shipping_estimate)) || 4;
-    const dealScore = marketAvg ? ((marketAvg - item.price) / marketAvg) * 100 : null;
+    const dealScore = clampDealScore(marketAvg ? ((marketAvg - item.price) / marketAvg) * 100 : null);
     const potentialProfit = marketAvg ? marketAvg - item.price - shippingEst : null;
     await this.klRepo.upsert(
       { keyword_id: keyword.id, listing_id: listing.id, deal_score: dealScore, market_avg: marketAvg, potential_profit: potentialProfit, matched_at: new Date() },

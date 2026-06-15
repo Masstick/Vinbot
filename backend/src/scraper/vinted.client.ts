@@ -143,7 +143,9 @@ export class VintedClient {
   async countSellerItemsMatching(sellerId: number, searchText: string): Promise<number | null> {
     await this.initSession();
     try {
-      const response = await this.client.get(`${this.baseUrl}/api/v2/users/${sellerId}/items`, {
+      // /wardrobe/{id}/items renvoie le JSON du dressing ; /users/{id}/items tombe
+      // sur la page anti-bot HTML (→ faux 404).
+      const response = await this.client.get(`${this.baseUrl}/api/v2/wardrobe/${sellerId}/items`, {
         params: { per_page: 20, page: 1, order: 'relevance' },
         headers: {
           Accept: 'application/json, text/plain, */*',
