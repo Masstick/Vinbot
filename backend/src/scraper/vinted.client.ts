@@ -145,8 +145,11 @@ export class VintedClient {
     try {
       // /wardrobe/{id}/items renvoie le JSON du dressing ; /users/{id}/items tombe
       // sur la page anti-bot HTML (→ faux 404).
+      // per_page=96 (max) : avec 20, les articles correspondants situés plus loin
+      // dans le dressing étaient ratés → vendeurs pro comptés à tort comme uniques.
+      // Au-delà de 96 articles le vendeur est de toute façon clairement un pro.
       const response = await this.client.get(`${this.baseUrl}/api/v2/wardrobe/${sellerId}/items`, {
-        params: { per_page: 20, page: 1, order: 'relevance' },
+        params: { per_page: 96, page: 1, order: 'newest_first' },
         headers: {
           Accept: 'application/json, text/plain, */*',
           Referer: `${this.baseUrl}/member/${sellerId}`,
