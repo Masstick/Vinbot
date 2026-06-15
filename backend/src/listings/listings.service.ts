@@ -263,14 +263,15 @@ export class ListingsService {
     if (opts.q) { params.push(`%${opts.q}%`); where.push(`l.title ILIKE $${params.length}`); }
     if (opts.maxAgeHours) { params.push(opts.maxAgeHours); where.push(`l.first_seen_at > NOW() - ($${params.length} || ' hours')::interval`); }
     if (opts.soloSeller) {
-      where.push(`l.seller_id NOT IN (
+      where.push(`l.seller_id IS NOT NULL AND l.seller_id NOT IN (
       SELECT l2.seller_id
       FROM listings l2
       INNER JOIN keyword_listings kl2 ON kl2.listing_id = l2.id
       WHERE kl2.keyword_id = kl.keyword_id
         AND l2.last_seen_at > NOW() - INTERVAL '24 hours'
+        AND l2.seller_id IS NOT NULL
       GROUP BY l2.seller_id
-      HAVING COUNT(*) > 1
+      HAVING COUNT(DISTINCT l2.id) > 1
     )`);
     }
     params.push(limit, offset);
