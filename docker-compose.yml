@@ -30,7 +30,6 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-changeme}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
-      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
       NODE_ENV: production
     depends_on:
       db:
