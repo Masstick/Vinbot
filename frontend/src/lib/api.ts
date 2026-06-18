@@ -15,8 +15,6 @@ export interface Keyword {
   search_text: string;
   min_price: number | null;
   max_price: number | null;
-  target_margin: number;
-  shipping_estimate: number;
   category: string | null;
   catalog_id: number | null;
   scan_interval_seconds: number;
@@ -48,25 +46,14 @@ export interface Listing {
   country_code?: string;
   /** Real ISO country of the seller (from their Vinted profile). Preferred over country_code. */
   seller_country?: string;
-  /** Short reasoning text from AI deal analysis (deal_analyses join) */
-  reasoning?: string;
 }
 
 export interface KeywordListing {
   keyword_id: number;
   listing_id: number;
-  deal_score: number | null;
-  market_avg: number | null;
-  potential_profit: number | null;
   matched_at: string;
   keyword: Keyword;
   listing: Listing;
-  /** Confidence score from AI analysis (0–1) */
-  analysis_confidence?: number;
-  /** AI recommendation: "buy" | "watch" | "skip" */
-  recommendation?: string;
-  /** AI scam risk assessment: "low" | "medium" | "high" */
-  scam_risk?: string;
 }
 
 export interface PricePoint {
@@ -79,7 +66,6 @@ export interface Stats {
   total_listings: number;
   active_keywords: number;
   alerts_24h: number;
-  validated_deals: number;
   listings_24h: number;
 }
 
@@ -103,13 +89,7 @@ function rowToKeywordListing(row: any): KeywordListing {
   return {
     keyword_id: row.keyword_id,
     listing_id: listingId,
-    deal_score: row.deal_score,
-    market_avg: row.market_avg,
-    potential_profit: row.potential_profit,
     matched_at: row.matched_at,
-    analysis_confidence: row.analysis_confidence ?? undefined,
-    recommendation: row.recommendation ?? undefined,
-    scam_risk: row.scam_risk ?? undefined,
     keyword: { id: row.keyword_id, label: row.keyword_label } as Keyword,
     listing: {
       id: listingId,
@@ -127,7 +107,6 @@ function rowToKeywordListing(row: any): KeywordListing {
       freshness_hours: row.freshness_hours != null ? parseFloat(String(row.freshness_hours)) : undefined,
       country_code: row.country_code ?? undefined,
       seller_country: row.seller_country ?? undefined,
-      reasoning: row.reasoning ?? undefined,
     },
   };
 }
@@ -167,8 +146,5 @@ export const api = {
     status: () => req<any>('/scraper/status'),
     pause: () => req<{ paused: boolean }>('/scraper/pause', { method: 'POST' }),
     resume: () => req<{ paused: boolean }>('/scraper/resume', { method: 'POST' }),
-  },
-  mistral: {
-    test: () => req<{ ok: boolean; error?: string }>('/mistral/test', { method: 'POST' }),
   },
 };

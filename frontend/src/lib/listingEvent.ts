@@ -6,6 +6,4 @@ export interface ListingEvent {
   url: string | null;
   keywordLabel: string;
   vintedCreatedAt: string | null;
-  dealScore: number | null;
-  potentialProfit: number | null;
 }
