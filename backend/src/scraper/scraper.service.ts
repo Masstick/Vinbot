@@ -8,7 +8,7 @@ import { MistralService } from '../analysis/mistral.service';
 import { VintedClientPool } from './vinted.client';
 import { Keyword } from '../keywords/keyword.entity';
 import { Listing } from '../listings/listing.entity';
-import { AsyncQueue } from '../analysis/async-queue';
+import { AsyncQueue } from './async-queue';
 
 const FAST_TICK_MS = 30_000;
 const MARKET_TICK_MS = 600_000;
