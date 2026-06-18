@@ -4,8 +4,6 @@ CREATE TABLE IF NOT EXISTS keywords (
   search_text           VARCHAR(500) NOT NULL,
   min_price             DECIMAL(10,2),
   max_price             DECIMAL(10,2),
-  target_margin         DECIMAL(10,2) DEFAULT 10,
-  shipping_estimate     DECIMAL(10,2) DEFAULT 4,
   category              VARCHAR(100),
   catalog_id            INTEGER,
   country_codes         TEXT DEFAULT 'fr',
@@ -38,9 +36,6 @@ CREATE TABLE IF NOT EXISTS listings (
 CREATE TABLE IF NOT EXISTS keyword_listings (
   keyword_id        INTEGER NOT NULL REFERENCES keywords(id) ON DELETE CASCADE,
   listing_id        INTEGER NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
-  deal_score        DECIMAL(5,2),
-  market_avg        DECIMAL(10,2),
-  potential_profit  DECIMAL(10,2),
   matched_at        TIMESTAMPTZ DEFAULT NOW(),
   PRIMARY KEY (keyword_id, listing_id)
 );
