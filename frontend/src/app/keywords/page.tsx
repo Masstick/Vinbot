@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { api, Keyword } from '@/lib/api';
 import { KeywordForm } from '@/components/KeywordForm';
-import { Tags, Plus, Pencil, Trash2, ToggleLeft, ToggleRight, Radio, Search, Coins, Truck, Clock } from 'lucide-react';
+import { Tags, Plus, Pencil, Trash2, ToggleLeft, ToggleRight, Radio, Search, Coins, Clock } from 'lucide-react';
 
 export default function KeywordsPage() {
   const [keywords, setKeywords] = useState<Keyword[]>([]);
@@ -139,14 +139,6 @@ export default function KeywordsPage() {
 
                 {/* Parameters Grid */}
                 <div className="flex flex-wrap gap-x-6 gap-y-2 pt-1.5 text-xs text-zinc-400 font-medium">
-                  <span className="flex items-center gap-1">
-                    <Coins size={13} className="text-zinc-600" />
-                    Marge cible : <strong className="text-zinc-200">{kw.target_margin}€</strong>
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Truck size={13} className="text-zinc-600" />
-                    Envoi est. : <strong className="text-zinc-200">{kw.shipping_estimate}€</strong>
-                  </span>
                   {kw.min_price && (
                     <span className="flex items-center gap-1">
                       <Coins size={13} className="text-zinc-600" />

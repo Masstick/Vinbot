@@ -27,8 +27,6 @@ export function KeywordForm({ initial, onSaved, onCancel }: Props) {
     search_text: initial?.search_text ?? '',
     min_price: initial?.min_price ?? '',
     max_price: initial?.max_price ?? '',
-    target_margin: initial?.target_margin ?? 10,
-    shipping_estimate: initial?.shipping_estimate ?? 4,
     category: initial?.category ?? '',
     catalog_id: initial?.catalog_id ?? '',
     scan_interval_seconds: initial?.scan_interval_seconds ?? 120,
@@ -49,8 +47,6 @@ export function KeywordForm({ initial, onSaved, onCancel }: Props) {
         ...form,
         min_price: form.min_price === '' ? null : Number(form.min_price),
         max_price: form.max_price === '' ? null : Number(form.max_price),
-        target_margin: Number(form.target_margin),
-        shipping_estimate: Number(form.shipping_estimate),
         scan_interval_seconds: Number(form.scan_interval_seconds),
         category: form.category || null,
         catalog_id: form.catalog_id === '' ? null : Number(form.catalog_id),
@@ -104,36 +100,6 @@ export function KeywordForm({ initial, onSaved, onCancel }: Props) {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        {/* Marge cible */}
-        <div>
-          <label className={labelClass}>
-            Marge cible (€)
-          </label>
-          <input
-            className={fieldClass}
-            type="number"
-            step="0.5"
-            min="0"
-            value={form.target_margin}
-            onChange={e => set('target_margin', e.target.value)}
-          />
-        </div>
-
-        {/* Frais d'envoi */}
-        <div>
-          <label className={labelClass}>
-            Frais envoi est. (€)
-          </label>
-          <input
-            className={fieldClass}
-            type="number"
-            step="0.5"
-            min="0"
-            value={form.shipping_estimate}
-            onChange={e => set('shipping_estimate', e.target.value)}
-          />
-        </div>
-
         {/* Prix min absolu */}
         <div>
           <label className={labelClass}>
