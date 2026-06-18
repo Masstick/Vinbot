@@ -1,5 +1,13 @@
+CREATE TABLE IF NOT EXISTS users (
+  id                SERIAL PRIMARY KEY,
+  name              VARCHAR(100) NOT NULL,
+  telegram_chat_id  VARCHAR(50) NOT NULL,
+  created_at        TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS keywords (
   id                    SERIAL PRIMARY KEY,
+  user_id               INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   label                 VARCHAR(255) NOT NULL,
   search_text           VARCHAR(500) NOT NULL,
   min_price             DECIMAL(10,2),
@@ -76,3 +84,4 @@ CREATE INDEX IF NOT EXISTS idx_notifications_log ON notifications_log(listing_id
 CREATE INDEX IF NOT EXISTS idx_listings_vinted_created_at ON listings(vinted_created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_kl_seller_item_count ON keyword_listings(seller_item_count);
 CREATE INDEX IF NOT EXISTS idx_listings_seller_country ON listings(seller_country);
+CREATE INDEX IF NOT EXISTS idx_keywords_user_id ON keywords(user_id);
