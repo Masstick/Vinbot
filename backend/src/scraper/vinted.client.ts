@@ -165,17 +165,36 @@ export class VintedClient {
     }
   }
 
+  /**
+   * Filtre de pertinence : TOUS les termes de la recherche doivent être présents
+   * dans le titre (logique ET). Une normalisation unifie les variantes d'unités
+   * (8 Go = 8gb = 8 GB, ddr 4 = ddr4, 3200 mhz = 3200mhz) pour ne pas écarter
+   * les annonces FR correctement libellées. Ex. "Ddr4 3200 8gb" ne garde que les
+   * annonces contenant ddr4 ET 3200 ET 8gb — plus de DDR3 4 Go parasites.
+   */
   private filterByTitle(items: any[], searchText: string): any[] {
-    const tokens = searchText
-      .toLowerCase()
+    const tokens = this.normalizeSpecs(searchText)
       .split(/\s+/)
       .filter(t => t.length >= 2);
     if (tokens.length === 0) return items;
     return items.filter(item => {
-      const title = (item.title ?? '').toLowerCase();
+      const title = this.normalizeSpecs(item.title ?? '');
       if (!title) return false;
-      return tokens.some(token => title.includes(token));
+      return tokens.every(token => title.includes(token));
     });
+  }
+
+  /**
+   * Normalise les specs matériel pour comparer titre et recherche de façon
+   * tolérante aux variantes d'écriture (espaces, Go/GB, MHz, DDR n).
+   */
+  private normalizeSpecs(s: string): string {
+    return s
+      .toLowerCase()
+      .replace(/(\d+)\s*(go|gb)\b/g, '$1gb') // 8 Go / 8GB / 8 gb → 8gb
+      .replace(/(\d+)\s*(mo|mb)\b/g, '$1mb') // 512 Mo → 512mb
+      .replace(/(\d+)\s*(mhz|ghz)\b/g, '$1$2') // 3200 mhz → 3200mhz
+      .replace(/\bddr\s+(\d)/g, 'ddr$1'); // ddr 4 → ddr4
   }
 
   private parseItem(item: any): VintedItem {

@@ -15,15 +15,38 @@ describe('VintedClient.filterByTitle', () => {
     expect(filtered[0].title).toBe('Intel Core i7-9700K');
   });
 
-  it('keeps item matching any token from multi-word search', () => {
+  it('requires ALL tokens from a multi-word search (logique ET)', () => {
     const items = [
-      { title: 'Processeur Intel i7-8700K' },
+      { title: 'Processeur Intel i7-8700K' }, // a "i7" mais pas "processeur"… si, contient les deux
       { title: 'Core 2 Duo E8400' },
-      { title: 'Processeur AMD Ryzen 5' },
+      { title: 'Processeur AMD Ryzen 5' }, // "processeur" mais pas "i7"
     ];
     const filtered = (client as any).filterByTitle(items, 'processeur i7');
-    // Contient "processeur" ou "i7" → les deux premiers passent
-    expect(filtered).toHaveLength(2);
+    // Seul le titre contenant À LA FOIS "processeur" et "i7" passe
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0].title).toBe('Processeur Intel i7-8700K');
+  });
+
+  it('rejects DDR3/4Go listings for a "Ddr4 3200 8gb" search', () => {
+    const items = [
+      { title: 'RAM DDR4 3200MHz 8 Go Corsair Vengeance' }, // match exact
+      { title: 'Barrette DDR3 1600 MHz 4 Go' }, // mauvais type + mauvaise taille
+      { title: 'Kit DDR4 2666 8GB' }, // bonne taille mais mauvaise fréquence
+      { title: 'DDR4 3200 4GB' }, // bon type/fréquence mais mauvaise taille
+    ];
+    const filtered = (client as any).filterByTitle(items, 'Ddr4 3200 8gb');
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0].title).toBe('RAM DDR4 3200MHz 8 Go Corsair Vengeance');
+  });
+
+  it('normalise les unités mémoire (8gb = 8 Go = 8 GB) et la fréquence', () => {
+    const items = [
+      { title: 'DDR4 3200 MHz 8GB' },
+      { title: 'DDR4 3200mhz 8 go' },
+      { title: 'DDR4 3200 8 GB' },
+    ];
+    const filtered = (client as any).filterByTitle(items, 'ddr4 3200 8gb');
+    expect(filtered).toHaveLength(3);
   });
 
   it('is case-insensitive', () => {
