@@ -24,9 +24,4 @@ export class ScraperController {
   backfill(@Body() body: { keywordId?: number; pages?: number }) {
     return this.service.backfill(body?.keywordId, body?.pages ?? 20);
   }
-
-  @Post('backfill-mistral')
-  backfillMistral(@Body() body: { limit?: number }) {
-    return this.service.backfillMistral(body?.limit ?? 200);
-  }
 }

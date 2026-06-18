@@ -15,8 +15,6 @@ export interface ListingEvent {
   url: string | null;
   keywordLabel: string;
   vintedCreatedAt: string | null;
-  dealScore: number | null;
-  potentialProfit: number | null;
 }
 
 @WebSocketGateway({ cors: { origin: '*' } })
@@ -32,21 +30,6 @@ export class DealsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   handleDisconnect(client: Socket) {
     this.logger.log(`Client WS déconnecté : ${client.id}`);
-  }
-
-  emitNewDeal(payload: {
-    listingId: number;
-    title: string;
-    price: number;
-    marketAvg: number;
-    profit: number;
-    dealScore: number;
-    photoUrl: string | null;
-    url: string | null;
-    keywordLabel: string;
-  }) {
-    this.server.emit('new-deal', payload);
-    this.logger.log(`📡 Deal émis WS : "${payload.title}" → +${payload.profit.toFixed(0)}€`);
   }
 
   emitNewListing(payload: ListingEvent) {

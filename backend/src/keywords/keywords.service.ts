@@ -34,19 +34,7 @@ export class KeywordsService {
   async update(id: number, dto: Partial<CreateKeywordDto>): Promise<Keyword> {
     await this.findOne(id);
     await this.repo.update(id, { ...dto, updated_at: new Date() });
-    const updated = await this.findOne(id);
-    // Recalcule potential_profit pour toutes les annonces du mot-clé avec le nouveau shipping_estimate
-    await this.dataSource.query(
-      `UPDATE keyword_listings kl
-       SET potential_profit = kl.market_avg - l.price - $1
-       FROM listings l
-       WHERE kl.listing_id = l.id
-         AND kl.keyword_id = $2
-         AND kl.market_avg IS NOT NULL
-         AND l.price IS NOT NULL`,
-      [parseFloat(String(updated.shipping_estimate)) || 4, id],
-    );
-    return updated;
+    return this.findOne(id);
   }
 
   async remove(id: number): Promise<void> {

@@ -17,12 +17,6 @@ export class Keyword {
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   max_price: number | null;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 10 })
-  target_margin: number;
-
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 4 })
-  shipping_estimate: number;
-
   @Column({ type: 'varchar', length: 100, nullable: true })
   category: string | null;
 
@@ -34,9 +28,6 @@ export class Keyword {
 
   @Column({ default: 120 })
   scan_interval_seconds: number;
-
-  @Column({ default: 5 })
-  market_scan_pages: number;
 
   @Column({ default: true })
   active: boolean;

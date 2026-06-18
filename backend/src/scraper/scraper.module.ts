@@ -4,10 +4,9 @@ import { ScraperController } from './scraper.controller';
 import { KeywordsModule } from '../keywords/keywords.module';
 import { ListingsModule } from '../listings/listings.module';
 import { NotificationsModule } from '../notifications/notifications.module';
-import { AnalysisModule } from '../analysis/analysis.module';
 
 @Module({
-  imports: [KeywordsModule, ListingsModule, NotificationsModule, AnalysisModule],
+  imports: [KeywordsModule, ListingsModule, NotificationsModule],
   providers: [ScraperService],
   controllers: [ScraperController],
 })

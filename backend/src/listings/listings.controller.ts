@@ -26,16 +26,6 @@ export class ListingsController {
     });
   }
 
-  @Get('opportunities')
-  getOpportunities(@Query('keyword_id') keywordId?: string, @Query('limit') limit?: string) {
-    return this.service.getOpportunities(keywordId ? parseInt(keywordId) : undefined, limit ? parseInt(limit) : 50);
-  }
-
-  @Get('validated')
-  getValidated(@Query('limit') limit?: string) {
-    return this.service.getValidated(limit ? parseInt(limit) : 50);
-  }
-
   @Get('stats')
   getStats() {
     return this.service.getStats();

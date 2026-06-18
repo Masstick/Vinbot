@@ -48,12 +48,6 @@ export class Listing {
   @Column({ type: 'int', nullable: true })
   favourite_count: number | null;
 
-  @Column({ type: 'varchar', length: 200, nullable: true })
-  model_label: string | null;
-
-  @Column({ type: 'decimal', precision: 3, scale: 2, nullable: true })
-  model_confidence: number | null;
-
   @CreateDateColumn()
   first_seen_at: Date;
 

@@ -21,18 +21,6 @@ export class CreateKeywordDto {
   max_price?: number;
 
   @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  target_margin?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  shipping_estimate?: number;
-
-  @IsOptional()
   @IsString()
   category?: string;
 

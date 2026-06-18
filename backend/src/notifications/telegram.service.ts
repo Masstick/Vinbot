@@ -34,23 +34,22 @@ export class TelegramService {
     return !!existing;
   }
 
-  async sendDealAlert(listing: Listing, keyword: Keyword, dealScore: number, marketAvg: number, potentialProfit: number): Promise<void> {
+  async sendListingAlert(listing: Listing, keyword: Keyword, countryCode: string): Promise<void> {
     if (!this.configured) {
       this.logger.warn('Telegram non configuré — alerte ignorée');
       return;
     }
-
     if (await this.alreadyNotified(listing.id, keyword.id)) return;
 
+    const country = countryCode ? countryCode.toUpperCase() : '';
     const caption = [
-      `🔥 *${this.escape(listing.title ?? 'Annonce Vinted')}*`,
+      `🆕 *${this.escape(listing.title ?? 'Annonce Vinted')}*`,
       ``,
-      `💶 ${listing.price}€  _(moy\\. marché : ${marketAvg.toFixed(0)}€)_`,
-      `💰 Marge potentielle : *+${potentialProfit.toFixed(0)}€* \\(${dealScore.toFixed(0)}% sous la moyenne\\)`,
-      `🚚 Frais estimés : ${keyword.shipping_estimate}€`,
-      listing.brand ? `🏷️ ${this.escape(listing.brand)}${listing.condition_label ? ' · ' + this.escape(listing.condition_label) : ''}` : '',
-      ``,
-      `🔑 Mot\\-clé : _${this.escape(keyword.label)}_`,
+      `💶 *${this.escape(String(listing.price ?? '?'))}€*`,
+      listing.brand
+        ? `🏷️ ${this.escape(listing.brand)}${listing.condition_label ? ' · ' + this.escape(listing.condition_label) : ''}`
+        : '',
+      `🔑 _${this.escape(keyword.label)}_${country ? ' · ' + this.escape(country) : ''}`,
       `[Voir l'annonce](${listing.url})`,
     ].filter(Boolean).join('\n');
 
