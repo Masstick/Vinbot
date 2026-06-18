@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { KeywordsService } from '../keywords/keywords.service';
 import { ListingsService } from '../listings/listings.service';
 import { TelegramService } from '../notifications/telegram.service';
@@ -58,6 +59,10 @@ export class ScraperService implements OnModuleInit {
   private readonly clientPool = new VintedClientPool();
   private isFastRunning = false;
   private isMarketRunning = false;
+  // Pause manuelle persistée (table scraper_state) : quand true, les scans
+  // périodiques (fast + market + bootstrap) sont court-circuités. Les files
+  // IA/vendeur déjà remplies se vident d'elles-mêmes (plus rien n'y entre).
+  private paused = false;
   private lastRunAt: Map<number, number> = new Map();
   private lastScrapeTime: Date | null = null;
   private readonly bootstrappedKeywords = new Set<number>();
@@ -76,6 +81,7 @@ export class ScraperService implements OnModuleInit {
     private readonly telegramService: TelegramService,
     private readonly dealsGateway: DealsGateway,
     private readonly mistralService: MistralService,
+    private readonly dataSource: DataSource,
   ) {
     this.modelQueue = new AsyncQueue(this.processModelExtraction.bind(this), 1, 1);
     this.analysisQueue = new AsyncQueue(this.processDealAnalysis.bind(this), 1, 3);
@@ -83,10 +89,51 @@ export class ScraperService implements OnModuleInit {
     this.sellerQueue = new AsyncQueue(this.processSellerCheck.bind(this), 1, 1);
   }
 
-  onModuleInit() {
-    this.logger.log('ScraperService initialisé — premier fast scan dans 5s');
+  async onModuleInit() {
+    await this.loadPausedState();
+    this.logger.log(`ScraperService initialisé — état : ${this.paused ? 'EN PAUSE' : 'actif'}, premier fast scan dans 5s`);
     setTimeout(() => this.scheduleFastTick(), 5000);
     setTimeout(() => this.scheduleMarketTick(), MARKET_TICK_MS);
+  }
+
+  /**
+   * Crée la table de state si absente (le schéma n'a pas de runner de migration)
+   * et charge le flag de pause. Idempotent : sûr à chaque démarrage.
+   */
+  private async loadPausedState(): Promise<void> {
+    try {
+      await this.dataSource.query(
+        `CREATE TABLE IF NOT EXISTS scraper_state (
+           id INT PRIMARY KEY DEFAULT 1,
+           paused BOOLEAN NOT NULL DEFAULT FALSE,
+           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+           CONSTRAINT scraper_state_singleton CHECK (id = 1)
+         )`,
+      );
+      await this.dataSource.query(
+        `INSERT INTO scraper_state (id, paused) VALUES (1, FALSE) ON CONFLICT (id) DO NOTHING`,
+      );
+      const rows = await this.dataSource.query(`SELECT paused FROM scraper_state WHERE id = 1`);
+      this.paused = rows.length > 0 && rows[0].paused === true;
+    } catch (err: any) {
+      this.logger.error(`[ScraperState] chargement impossible, scraper actif par défaut : ${err.message}`);
+      this.paused = false;
+    }
+  }
+
+  /** Met en pause / relance les scans périodiques (persiste le choix en base). */
+  async setPaused(paused: boolean): Promise<{ paused: boolean }> {
+    this.paused = paused;
+    await this.dataSource.query(
+      `UPDATE scraper_state SET paused = $1, updated_at = NOW() WHERE id = 1`,
+      [paused],
+    );
+    this.logger.log(`Scraper ${paused ? 'mis en pause' : 'relancé'} manuellement`);
+    return { paused };
+  }
+
+  isPaused(): boolean {
+    return this.paused;
   }
 
   private scheduleFastTick(): void {
@@ -217,6 +264,7 @@ export class ScraperService implements OnModuleInit {
   }
 
   private async runFastScan(): Promise<void> {
+    if (this.paused) return;
     const keywords = await this.keywordsService.findActive();
     if (keywords.length === 0) return;
 
@@ -295,6 +343,7 @@ export class ScraperService implements OnModuleInit {
   }
 
   private async runMarketScan(): Promise<void> {
+    if (this.paused) return;
     if (!this.mistralService.isEnabled()) return;
     const keywords = await this.keywordsService.findActive();
     for (const keyword of keywords) {
@@ -408,6 +457,7 @@ export class ScraperService implements OnModuleInit {
   async getStatus() {
     const keywords = await this.keywordsService.findActive();
     return {
+      paused: this.paused,
       isFastRunning: this.isFastRunning,
       isMarketRunning: this.isMarketRunning,
       bootstrappingKeyword: this.bootstrappingKeyword,

@@ -59,6 +59,18 @@ CREATE TABLE IF NOT EXISTS notifications_log (
   sent_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- État runtime du scraper (singleton). Permet de mettre en pause / relancer
+-- les scans périodiques de façon persistante (survit aux redémarrages).
+-- Note : la table est aussi créée à la volée au démarrage du backend
+-- (ScraperService.loadPausedState) pour les bases déjà en place.
+CREATE TABLE IF NOT EXISTS scraper_state (
+  id         INT PRIMARY KEY DEFAULT 1,
+  paused     BOOLEAN NOT NULL DEFAULT FALSE,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT scraper_state_singleton CHECK (id = 1)
+);
+INSERT INTO scraper_state (id, paused) VALUES (1, FALSE) ON CONFLICT (id) DO NOTHING;
+
 CREATE INDEX IF NOT EXISTS idx_listings_vinted_id ON listings(vinted_id);
 CREATE INDEX IF NOT EXISTS idx_price_history_listing_id ON price_history(listing_id);
 CREATE INDEX IF NOT EXISTS idx_kl_keyword_id ON keyword_listings(keyword_id);

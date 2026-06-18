@@ -1,7 +1,7 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
-import { Settings, Send, Bot, Check, AlertCircle, Info, ChevronRight, Terminal, Brain } from 'lucide-react';
+import { Settings, Send, Bot, Check, AlertCircle, Info, ChevronRight, Terminal, Brain, Play, Pause } from 'lucide-react';
 
 export default function SettingsPage() {
   const [testing, setTesting] = useState(false);
@@ -33,6 +33,30 @@ export default function SettingsPage() {
       setMistralResult({ ok: false, error: "Impossible de joindre l'API" });
     } finally {
       setTestingMistral(false);
+    }
+  }
+
+  // ─── Contrôle du scraper (pause / reprise persistante) ───
+  const [scraperPaused, setScraperPaused] = useState<boolean | null>(null);
+  const [togglingScraper, setTogglingScraper] = useState(false);
+
+  useEffect(() => {
+    api.scraper
+      .status()
+      .then(s => setScraperPaused(Boolean(s?.paused)))
+      .catch(() => setScraperPaused(null));
+  }, []);
+
+  async function toggleScraper() {
+    if (scraperPaused === null) return;
+    setTogglingScraper(true);
+    try {
+      const res = scraperPaused ? await api.scraper.resume() : await api.scraper.pause();
+      setScraperPaused(res.paused);
+    } catch {
+      // garde l'état courant en cas d'échec réseau
+    } finally {
+      setTogglingScraper(false);
     }
   }
 
@@ -181,6 +205,64 @@ export default function SettingsPage() {
               )}
             </div>
           )}
+        </div>
+
+        {/* Scraper Control Panel */}
+        <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-6 space-y-5 backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            <div
+              className={`p-2 rounded-xl border ${
+                scraperPaused
+                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                  : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+              }`}
+            >
+              {scraperPaused ? <Pause size={18} /> : <Play size={18} />}
+            </div>
+            <div>
+              <h2 className="font-bold text-white text-base">Contrôle du scraper</h2>
+              <p className="text-xs text-zinc-500">
+                Mettez les scans Vinted en pause ou relancez-les. Le choix est conservé même après un redémarrage.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between bg-zinc-950/40 border border-zinc-850 rounded-xl px-4 py-3">
+            <div className="flex items-center gap-2.5">
+              <span
+                className={`h-2.5 w-2.5 rounded-full ${
+                  scraperPaused === null
+                    ? 'bg-zinc-600'
+                    : scraperPaused
+                    ? 'bg-amber-400'
+                    : 'bg-emerald-400 animate-pulse'
+                }`}
+              />
+              <span className="text-sm font-medium text-zinc-200">
+                {scraperPaused === null
+                  ? 'État inconnu'
+                  : scraperPaused
+                  ? 'En pause'
+                  : 'Actif'}
+              </span>
+            </div>
+            <button
+              onClick={toggleScraper}
+              disabled={togglingScraper || scraperPaused === null}
+              className={`flex items-center gap-2 text-xs font-bold px-4 py-2.5 rounded-xl transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${
+                scraperPaused
+                  ? 'bg-emerald-700 hover:bg-emerald-600 text-white'
+                  : 'bg-amber-700 hover:bg-amber-600 text-white'
+              }`}
+            >
+              {scraperPaused ? <Play size={14} /> : <Pause size={14} />}
+              {togglingScraper
+                ? '…'
+                : scraperPaused
+                ? 'Relancer le scraper'
+                : 'Mettre en pause'}
+            </button>
+          </div>
         </div>
 
         {/* About Scraper Panel */}

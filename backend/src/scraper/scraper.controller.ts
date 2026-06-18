@@ -10,6 +10,16 @@ export class ScraperController {
     return this.service.getStatus();
   }
 
+  @Post('pause')
+  pause() {
+    return this.service.setPaused(true);
+  }
+
+  @Post('resume')
+  resume() {
+    return this.service.setPaused(false);
+  }
+
   @Post('backfill')
   backfill(@Body() body: { keywordId?: number; pages?: number }) {
     return this.service.backfill(body?.keywordId, body?.pages ?? 20);

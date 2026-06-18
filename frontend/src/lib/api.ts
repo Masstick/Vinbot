@@ -157,7 +157,10 @@ export const api = {
     latest: (params: LatestListingsParams = {}) =>
       req<any[]>(`/listings${latestQuery(params)}`).then(rows => rows.map(rowToKeywordListing)),
     opportunities: (keywordId?: number) => req<KeywordListing[]>(`/listings/opportunities${keywordId ? `?keyword_id=${keywordId}` : ''}`),
-    validated: () => req<any[]>('/listings/validated').then(rows => rows.map(rowToKeywordListing)),
+    // getValidated (backend) renvoie déjà des objets KeywordListing imbriqués
+    // (listing/keyword), comme getOpportunities — pas de rowToKeywordListing ici,
+    // sinon les champs imbriqués (titre, photo, prix) sont écrasés en undefined.
+    validated: () => req<KeywordListing[]>('/listings/validated'),
     get: (id: number) => req<any>(`/listings/${id}`),
     history: (id: number) => req<PricePoint[]>(`/listings/${id}/history`),
     stats: () => req<Stats>('/listings/stats'),
@@ -167,6 +170,8 @@ export const api = {
   },
   scraper: {
     status: () => req<any>('/scraper/status'),
+    pause: () => req<{ paused: boolean }>('/scraper/pause', { method: 'POST' }),
+    resume: () => req<{ paused: boolean }>('/scraper/resume', { method: 'POST' }),
   },
   mistral: {
     test: () => req<{ ok: boolean; error?: string }>('/mistral/test', { method: 'POST' }),
