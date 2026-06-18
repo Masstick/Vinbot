@@ -16,14 +16,12 @@ describe('ScraperService — pause/resume', () => {
   beforeEach(() => {
     query = jest.fn().mockResolvedValue([]);
     const keywordsService: any = { findActive: jest.fn().mockResolvedValue([]) };
-    const mistralService: any = { isEnabled: jest.fn().mockReturnValue(false) };
     const dataSource: any = { query };
     service = new ScraperService(
       keywordsService,
       {} as any,
       {} as any,
       {} as any,
-      mistralService,
       dataSource,
     );
   });
