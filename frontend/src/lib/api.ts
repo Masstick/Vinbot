@@ -23,6 +23,14 @@ export interface Keyword {
   updated_at: string;
   /** ISO country codes to scan, e.g. ["fr", "be", "es"] */
   country_codes?: string[];
+  user_id: number;
+}
+
+export interface User {
+  id: number;
+  name: string;
+  telegram_chat_id: string;
+  created_at: string;
 }
 
 export interface Listing {
@@ -77,6 +85,7 @@ export interface LatestListingsParams {
   q?: string;
   maxAgeHours?: number;
   soloSeller?: boolean;
+  userId?: number;
 }
 
 /**
@@ -119,13 +128,14 @@ function latestQuery(p: LatestListingsParams): string {
   if (p.q) qs.set('q', p.q);
   if (p.maxAgeHours) qs.set('max_age_hours', String(p.maxAgeHours));
   if (p.soloSeller) qs.set('solo_seller', '1');
+  if (p.userId) qs.set('user_id', String(p.userId));
   const s = qs.toString();
   return s ? `?${s}` : '';
 }
 
 export const api = {
   keywords: {
-    list: () => req<Keyword[]>('/keywords'),
+    list: (userId?: number) => req<Keyword[]>(`/keywords${userId ? `?user_id=${userId}` : ''}`),
     get: (id: number) => req<Keyword>(`/keywords/${id}`),
     create: (data: Partial<Keyword>) => req<Keyword>('/keywords', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: Partial<Keyword>) => req<Keyword>(`/keywords/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -136,14 +146,21 @@ export const api = {
       req<any[]>(`/listings${latestQuery(params)}`).then(rows => rows.map(rowToKeywordListing)),
     get: (id: number) => req<any>(`/listings/${id}`),
     history: (id: number) => req<PricePoint[]>(`/listings/${id}/history`),
-    stats: () => req<Stats>('/listings/stats'),
+    stats: (userId?: number) => req<Stats>(`/listings/stats${userId ? `?user_id=${userId}` : ''}`),
   },
   telegram: {
-    test: () => req<{ ok: boolean; error?: string }>('/telegram/test', { method: 'POST' }),
+    test: (chatId: string) => req<{ ok: boolean; error?: string }>('/telegram/test', { method: 'POST', body: JSON.stringify({ chat_id: chatId }) }),
   },
   scraper: {
     status: () => req<any>('/scraper/status'),
     pause: () => req<{ paused: boolean }>('/scraper/pause', { method: 'POST' }),
     resume: () => req<{ paused: boolean }>('/scraper/resume', { method: 'POST' }),
+  },
+  users: {
+    list: () => req<User[]>('/users'),
+    get: (id: number) => req<User>(`/users/${id}`),
+    create: (data: Partial<User>) => req<User>('/users', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: Partial<User>) => req<User>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: number) => req<void>(`/users/${id}`, { method: 'DELETE' }),
   },
 };
