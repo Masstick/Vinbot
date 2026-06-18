@@ -156,11 +156,6 @@ export const api = {
   listings: {
     latest: (params: LatestListingsParams = {}) =>
       req<any[]>(`/listings${latestQuery(params)}`).then(rows => rows.map(rowToKeywordListing)),
-    opportunities: (keywordId?: number) => req<KeywordListing[]>(`/listings/opportunities${keywordId ? `?keyword_id=${keywordId}` : ''}`),
-    // getValidated (backend) renvoie déjà des objets KeywordListing imbriqués
-    // (listing/keyword), comme getOpportunities — pas de rowToKeywordListing ici,
-    // sinon les champs imbriqués (titre, photo, prix) sont écrasés en undefined.
-    validated: () => req<KeywordListing[]>('/listings/validated'),
     get: (id: number) => req<any>(`/listings/${id}`),
     history: (id: number) => req<PricePoint[]>(`/listings/${id}/history`),
     stats: () => req<Stats>('/listings/stats'),

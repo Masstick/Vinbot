@@ -1,10 +1,8 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
-import Link from 'next/link';
-import { api, KeywordListing, Stats } from '@/lib/api';
-import { DealCard } from '@/components/DealCard';
+import { api, Stats } from '@/lib/api';
 import { useKeywordChanged } from '@/lib/useKeywordChanged';
-import { RefreshCw, Database, Hash, Bell, Bot, Calendar, Sparkles, Plus } from 'lucide-react';
+import { RefreshCw, Database, Hash, Bell, Bot, Calendar, Sparkles } from 'lucide-react';
 
 function ScraperStatusBar({ status }: { status: any }) {
   const [tick, setTick] = useState(0);
@@ -92,41 +90,19 @@ function ScraperStatusBar({ status }: { status: any }) {
   );
 }
 
-function SkeletonCard() {
-  return (
-    <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl overflow-hidden h-[340px] flex flex-col justify-between p-4 animate-pulse">
-      <div className="w-full h-40 bg-zinc-800/50 rounded-xl mb-4" />
-      <div className="space-y-3 flex-1">
-        <div className="h-4 bg-zinc-800/60 rounded-md w-3/4" />
-        <div className="h-6 bg-zinc-800/60 rounded-md w-1/3" />
-        <div className="h-4 bg-zinc-800/40 rounded-md w-1/2" />
-      </div>
-      <div className="flex gap-2 mt-4">
-        <div className="h-8 bg-zinc-800/50 rounded-lg flex-1" />
-        <div className="h-8 bg-zinc-800/50 rounded-lg w-10" />
-      </div>
-    </div>
-  );
-}
-
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
-  const [opportunities, setOpportunities] = useState<KeywordListing[]>([]);
   const [scraperStatus, setScraperStatus] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadData = useCallback((showIndicator = false) => {
     if (showIndicator) setRefreshing(true);
     Promise.all([
       api.listings.stats().catch(() => null),
-      api.listings.opportunities().catch(() => []),
       api.scraper.status().catch(() => null),
-    ]).then(([s, ops, sc]) => {
+    ]).then(([s, sc]) => {
       setStats(s);
-      setOpportunities((ops as KeywordListing[]).slice(0, 10));
       setScraperStatus(sc);
-      setLoading(false);
       setRefreshing(false);
     });
   }, []);
@@ -148,7 +124,7 @@ export default function Dashboard() {
             <Bot className="text-indigo-400" size={28} />
             Tableau de bord
           </h1>
-          <p className="text-sm text-zinc-400 mt-1">Surveillance en temps réel et détection de marges.</p>
+          <p className="text-sm text-zinc-400 mt-1">Surveillance du scraper et des annonces collectées.</p>
         </div>
         <button
           onClick={() => loadData(true)}
@@ -164,7 +140,7 @@ export default function Dashboard() {
       <ScraperStatusBar status={scraperStatus} />
 
       {/* Stats Cards Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           {
             label: 'Annonces analysées',
@@ -177,12 +153,6 @@ export default function Dashboard() {
             value: stats?.listings_24h ?? '—',
             icon: Sparkles,
             color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
-          },
-          {
-            label: 'Deals validés IA',
-            value: stats?.validated_deals ?? '—',
-            icon: Bot,
-            color: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
           },
           {
             label: 'Mots-clés surveillés',
@@ -213,56 +183,6 @@ export default function Dashboard() {
             </div>
           );
         })}
-      </div>
-
-      {/* Opportunities Section */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-zinc-100 flex items-center gap-2">
-            <Sparkles size={18} className="text-yellow-400" />
-            Top 10 opportunités de revente
-          </h2>
-          <Link
-            href="/opportunities"
-            className="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1"
-          >
-            Voir tout
-            <span className="text-zinc-600 font-normal">({opportunities.length})</span> →
-          </Link>
-        </div>
-
-        {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <SkeletonCard key={i} />
-            ))}
-          </div>
-        ) : opportunities.length === 0 ? (
-          <div className="bg-zinc-900/40 border border-dashed border-zinc-800 rounded-2xl p-12 text-center max-w-xl mx-auto space-y-4">
-            <div className="bg-zinc-950 p-4 rounded-full inline-block border border-zinc-800">
-              <Bot size={32} className="text-zinc-600" />
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-sm font-bold text-zinc-200">Aucune opportunité disponible</h3>
-              <p className="text-xs text-zinc-500 max-w-sm mx-auto">
-                Le scraper n'a pas encore détecté d'annonces sous la moyenne du marché. Ajoutez des mots-clés de recherche pour lancer la surveillance.
-              </p>
-            </div>
-            <Link
-              href="/keywords"
-              className="inline-flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 rounded-xl text-xs font-semibold shadow-md glow-indigo transition-colors"
-            >
-              <Plus size={14} />
-              Ajouter un mot-clé
-            </Link>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {opportunities.map(kl => (
-              <DealCard key={`${kl.keyword_id}-${kl.listing_id}`} kl={kl} />
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );

@@ -1,8 +1,7 @@
 'use client';
-import { useState } from 'react';
 import Link from 'next/link';
 import { KeywordListing } from '@/lib/api';
-import { ExternalLink, TrendingDown, ArrowUpRight, Clock } from 'lucide-react';
+import { ExternalLink, ArrowUpRight, Clock } from 'lucide-react';
 
 // ─── Freshness ────────────────────────────────────────────────────────────────
 
@@ -12,11 +11,7 @@ function getFreshnessHours(listing: KeywordListing['listing']): number {
   return (Date.now() - new Date(ref).getTime()) / 3_600_000;
 }
 
-interface FreshnessBadgeProps {
-  hours: number;
-}
-
-function FreshnessBadge({ hours }: FreshnessBadgeProps) {
+function FreshnessBadge({ hours }: { hours: number }) {
   if (hours < 1) {
     return (
       <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
@@ -76,30 +71,6 @@ function ConditionBadge({ label }: { label: string }) {
   );
 }
 
-// ─── Score bar ────────────────────────────────────────────────────────────────
-
-function ScoreBar({ score }: { score: number }) {
-  const pct = Math.min(100, Math.max(0, score));
-  const color =
-    pct >= 60
-      ? 'bg-emerald-500'
-      : pct >= 30
-      ? 'bg-amber-500'
-      : 'bg-rose-500';
-
-  return (
-    <div className="w-full bg-zinc-800 rounded-full h-4 overflow-hidden relative">
-      <div
-        className={`h-full rounded-full transition-all ${color}`}
-        style={{ width: `${pct}%` }}
-      />
-      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white mix-blend-luminosity">
-        {pct.toFixed(0)}%
-      </span>
-    </div>
-  );
-}
-
 // ─── Country flag ─────────────────────────────────────────────────────────────
 
 const FLAGS: Record<string, string> = {
@@ -122,29 +93,6 @@ function countryFlag(code: string): string | null {
   return FLAGS[c] ?? null;
 }
 
-// ─── Reasoning snippet ────────────────────────────────────────────────────────
-
-function ReasoningSnippet({ text }: { text: string }) {
-  const [expanded, setExpanded] = useState(false);
-  const truncated = text.length > 100;
-  const display = !truncated || expanded ? text : `${text.slice(0, 100)}…`;
-
-  return (
-    <p
-      className="text-[11px] italic text-zinc-400 leading-snug cursor-pointer"
-      onClick={() => setExpanded(e => !e)}
-      title={truncated ? (expanded ? 'Réduire' : 'Afficher tout') : undefined}
-    >
-      {display}
-      {truncated && (
-        <span className="ml-1 text-indigo-400 not-italic font-medium">
-          {expanded ? ' moins' : ' plus'}
-        </span>
-      )}
-    </p>
-  );
-}
-
 // ─── Main card ────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -152,11 +100,8 @@ interface Props {
 }
 
 export function DealCard({ kl }: Props) {
-  const { listing, keyword, deal_score, market_avg, potential_profit } = kl;
+  const { listing, keyword } = kl;
   const price = listing.price ? parseFloat(String(listing.price)) : null;
-  const avg = market_avg ? parseFloat(String(market_avg)) : null;
-  const profit = potential_profit ? parseFloat(String(potential_profit)) : null;
-  const score = deal_score ? parseFloat(String(deal_score)) : null;
 
   const freshnessHours = getFreshnessHours(listing);
   const flagCode = listing.seller_country ?? listing.country_code;
@@ -183,22 +128,6 @@ export function DealCard({ kl }: Props) {
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-transparent to-transparent opacity-60" />
         </Link>
-
-        {/* Deal Score badge (top right) */}
-        {score !== null && (
-          <span
-            className={`absolute top-2.5 right-2.5 flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg border backdrop-blur-md ${
-              score >= 40
-                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                : score >= 20
-                ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30'
-                : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-            }`}
-          >
-            <TrendingDown size={12} />
-            -{score.toFixed(0)}%
-          </span>
-        )}
 
         {/* Freshness badge (top left) */}
         <span className="absolute top-2.5 left-2.5 backdrop-blur-md">
@@ -241,44 +170,9 @@ export function DealCard({ kl }: Props) {
           </Link>
 
           {/* Pricing */}
-          <div className="flex items-baseline justify-between pt-1">
-            <div className="flex items-baseline gap-2">
-              <span className="text-xl font-black text-white">{price?.toFixed(1)}€</span>
-              {avg && (
-                <span className="text-xs text-zinc-500 line-through">
-                  Moy. {avg.toFixed(0)}€
-                </span>
-              )}
-            </div>
-            {/* Profit highlight */}
-            {profit !== null && profit > 0 && (
-              <span
-                className={`text-lg font-extrabold ${
-                  profit >= 30
-                    ? 'text-emerald-400'
-                    : profit >= 15
-                    ? 'text-cyan-400'
-                    : 'text-amber-400'
-                }`}
-              >
-                +{profit.toFixed(0)}€
-              </span>
-            )}
+          <div className="flex items-baseline pt-1">
+            <span className="text-xl font-black text-white">{price?.toFixed(1)}€</span>
           </div>
-
-          {/* Score bar */}
-          {score !== null && (
-            <div className="pt-1">
-              <ScoreBar score={score} />
-            </div>
-          )}
-
-          {/* AI Reasoning snippet */}
-          {listing.reasoning && (
-            <div className="pt-1">
-              <ReasoningSnippet text={listing.reasoning} />
-            </div>
-          )}
         </div>
 
         {/* Actions */}
