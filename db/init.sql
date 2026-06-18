@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS listings (
   seller_name     VARCHAR(255),
   seller_id       BIGINT,
   country_code    VARCHAR(5) DEFAULT 'fr',
+  seller_country  VARCHAR(5),
   view_count      INTEGER,
   favourite_count INTEGER,
   first_seen_at   TIMESTAMPTZ DEFAULT NOW(),
@@ -37,6 +38,8 @@ CREATE TABLE IF NOT EXISTS keyword_listings (
   keyword_id        INTEGER NOT NULL REFERENCES keywords(id) ON DELETE CASCADE,
   listing_id        INTEGER NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
   matched_at        TIMESTAMPTZ DEFAULT NOW(),
+  seller_item_count INTEGER,
+  seller_checked_at TIMESTAMPTZ,
   PRIMARY KEY (keyword_id, listing_id)
 );
 
@@ -71,3 +74,5 @@ CREATE INDEX IF NOT EXISTS idx_price_history_listing_id ON price_history(listing
 CREATE INDEX IF NOT EXISTS idx_kl_keyword_id ON keyword_listings(keyword_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_log ON notifications_log(listing_id, keyword_id, sent_at);
 CREATE INDEX IF NOT EXISTS idx_listings_vinted_created_at ON listings(vinted_created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_kl_seller_item_count ON keyword_listings(seller_item_count);
+CREATE INDEX IF NOT EXISTS idx_listings_seller_country ON listings(seller_country);

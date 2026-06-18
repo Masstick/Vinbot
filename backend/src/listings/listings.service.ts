@@ -139,10 +139,6 @@ export class ListingsService {
     return { ...listing, keyword_listings: kls, price_history: history };
   }
 
-  async getKeywordListing(keywordId: number, listingId: number): Promise<KeywordListing | null> {
-    return this.klRepo.findOneBy({ keyword_id: keywordId, listing_id: listingId });
-  }
-
   async getStats(): Promise<any> {
     const totalListings = await this.listingRepo.count();
     const totalKeywords = await this.dataSource.query('SELECT COUNT(*) FROM keywords WHERE active = true');

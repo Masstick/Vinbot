@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
-import { Settings, Send, Bot, Check, AlertCircle, Info, ChevronRight, Terminal, Play, Pause } from 'lucide-react';
+import { Settings, Send, Bot, Check, AlertCircle, Info, Terminal, Play, Pause } from 'lucide-react';
 
 export default function SettingsPage() {
   const [testing, setTesting] = useState(false);

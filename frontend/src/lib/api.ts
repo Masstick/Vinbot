@@ -80,9 +80,8 @@ export interface LatestListingsParams {
 }
 
 /**
- * Les endpoints SQL bruts (/listings, /listings/validated) renvoient des lignes
- * plates (l.* + kl.* + k.* + da.*) — on les remet en forme KeywordListing
- * pour réutiliser DealCard partout.
+ * L'endpoint SQL brut /listings renvoie des lignes plates (l.* + kl.* + k.*) —
+ * on les remet en forme KeywordListing pour réutiliser DealCard partout.
  */
 function rowToKeywordListing(row: any): KeywordListing {
   const listingId = row.listing_id ?? row.id;

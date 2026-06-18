@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Keyword } from './keyword.entity';
 import { CreateKeywordDto } from './dto/create-keyword.dto';
 
@@ -9,7 +9,6 @@ export class KeywordsService {
   constructor(
     @InjectRepository(Keyword)
     private readonly repo: Repository<Keyword>,
-    private readonly dataSource: DataSource,
   ) {}
 
   findAll(): Promise<Keyword[]> {
