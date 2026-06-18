@@ -69,6 +69,5 @@ INSERT INTO scraper_state (id, paused) VALUES (1, FALSE) ON CONFLICT (id) DO NOT
 CREATE INDEX IF NOT EXISTS idx_listings_vinted_id ON listings(vinted_id);
 CREATE INDEX IF NOT EXISTS idx_price_history_listing_id ON price_history(listing_id);
 CREATE INDEX IF NOT EXISTS idx_kl_keyword_id ON keyword_listings(keyword_id);
-CREATE INDEX IF NOT EXISTS idx_kl_deal_score ON keyword_listings(deal_score DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_log ON notifications_log(listing_id, keyword_id, sent_at);
 CREATE INDEX IF NOT EXISTS idx_listings_vinted_created_at ON listings(vinted_created_at DESC);
