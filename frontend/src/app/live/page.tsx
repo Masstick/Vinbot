@@ -2,21 +2,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useListingsSocket } from '@/lib/useListingsSocket';
 import { ListingEvent } from '@/lib/listingEvent';
-import { Radio, ExternalLink, Filter } from 'lucide-react';
+import { Radio, ExternalLink } from 'lucide-react';
 
 const MAX_ITEMS = 200;
 
 function formatTime(iso: string | null): string {
   if (!iso) return '—';
   return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-}
-
-function dealScoreColor(score: number | null): string {
-  if (score === null) return 'text-zinc-500';
-  if (score >= 30) return 'text-emerald-400';
-  if (score >= 15) return 'text-cyan-400';
-  if (score > 0) return 'text-amber-400';
-  return 'text-red-400';
 }
 
 interface ListingRowProps {
@@ -51,11 +43,6 @@ function ListingRow({ listing, receivedAt }: ListingRowProps) {
         {listing.price.toFixed(0)}€
       </span>
 
-      {/* Deal score */}
-      <span className={`shrink-0 text-xs font-bold w-14 text-right ${dealScoreColor(listing.dealScore)}`}>
-        {listing.dealScore !== null ? `${Math.abs(listing.dealScore).toFixed(0)}%` : '—'}
-      </span>
-
       {/* Received time */}
       <span className="shrink-0 text-[11px] text-zinc-600 font-mono w-16 text-right hidden md:block">
         {formatTime(receivedAt)}
@@ -82,7 +69,6 @@ function ListingRow({ listing, receivedAt }: ListingRowProps) {
 export default function LivePage() {
   const [items, setItems] = useState<Array<ListingEvent & { receivedAt: string }>>([]);
   const [totalReceived, setTotalReceived] = useState(0);
-  const [filter, setFilter] = useState<'all' | 'profitable'>('all');
   const [connected, setConnected] = useState(false);
 
   const handleListing = useCallback((listing: ListingEvent) => {
@@ -109,9 +95,7 @@ export default function LivePage() {
     };
   }, []); // socketRef.current is stable after mount
 
-  const displayed = filter === 'profitable'
-    ? items.filter(i => i.potentialProfit !== null && i.potentialProfit > 0)
-    : items;
+  const displayed = items;
 
   return (
     <div className="space-y-6">
@@ -139,24 +123,8 @@ export default function LivePage() {
         </div>
       </div>
 
-      {/* Filter bar */}
+      {/* Count */}
       <div className="flex items-center gap-3">
-        <Filter size={14} className="text-zinc-500" />
-        <div className="flex gap-2">
-          {(['all', 'profitable'] as const).map(f => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-xl border transition-colors ${
-                filter === f
-                  ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
-                  : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200'
-              }`}
-            >
-              {f === 'all' ? 'Toutes' : 'Rentables uniquement'}
-            </button>
-          ))}
-        </div>
         <span className="ml-auto text-xs font-mono text-zinc-600">
           {displayed.length} / {MAX_ITEMS} affichée{displayed.length !== 1 ? 's' : ''}
         </span>
@@ -170,7 +138,6 @@ export default function LivePage() {
           <span className="flex-1">Titre</span>
           <span className="hidden sm:block w-24 shrink-0">Mot-clé</span>
           <span className="w-14 shrink-0 text-right">Prix</span>
-          <span className="w-14 shrink-0 text-right">Score</span>
           <span className="hidden md:block w-16 shrink-0 text-right">Heure</span>
           <span className="w-[14px] shrink-0" />
         </div>
@@ -181,9 +148,7 @@ export default function LivePage() {
               <Radio size={28} className="text-zinc-600 animate-pulse" />
             </div>
             <p className="text-sm text-zinc-500">
-              {filter === 'profitable'
-                ? 'Aucune annonce rentable reçue pour l\'instant.'
-                : 'En attente des nouvelles annonces…'}
+              En attente des nouvelles annonces…
             </p>
           </div>
         ) : (
