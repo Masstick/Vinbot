@@ -85,7 +85,7 @@ export class ListingsService {
     return { listing, isNew, priceChanged };
   }
 
-  async getListings(opts: { keywordId?: number; limit?: number; offset?: number; country?: string; q?: string; maxAgeHours?: number; soloSeller?: boolean } = {}): Promise<any[]> {
+  async getListings(opts: { keywordId?: number; limit?: number; offset?: number; country?: string; q?: string; maxAgeHours?: number; soloSeller?: boolean; userId?: number } = {}): Promise<any[]> {
     const limit = Math.min(Math.max(opts.limit ?? 100, 1), 500);
     const offset = Math.max(opts.offset ?? 0, 0);
     const params: any[] = [];
@@ -102,6 +102,7 @@ export class ListingsService {
       // par le scraper via countSellerItemsMatching). NULL = pas encore vérifié → exclu.
       where.push(`kl.seller_item_count IS NOT NULL AND kl.seller_item_count <= 1`);
     }
+    if (opts.userId) { params.push(opts.userId); where.push(`k.user_id = $${params.length}`); }
     params.push(limit, offset);
     // DISTINCT ON : une seule ligne par annonce même si elle matche plusieurs mots-clés
     const sql = `
@@ -139,11 +140,28 @@ export class ListingsService {
     return { ...listing, keyword_listings: kls, price_history: history };
   }
 
-  async getStats(): Promise<any> {
+  async getStats(userId?: number): Promise<any> {
     const totalListings = await this.listingRepo.count();
-    const totalKeywords = await this.dataSource.query('SELECT COUNT(*) FROM keywords WHERE active = true');
-    const recentAlerts = await this.dataSource.query("SELECT COUNT(*) FROM notifications_log WHERE sent_at > NOW() - INTERVAL '24 hours'");
-    const newListings24h = await this.dataSource.query("SELECT COUNT(*) FROM listings WHERE first_seen_at > NOW() - INTERVAL '24 hours'");
+    const totalKeywords = userId
+      ? await this.dataSource.query('SELECT COUNT(*) FROM keywords k WHERE k.active = true AND k.user_id = $1', [userId])
+      : await this.dataSource.query('SELECT COUNT(*) FROM keywords WHERE active = true');
+    const recentAlerts = userId
+      ? await this.dataSource.query(
+          `SELECT COUNT(*) FROM notifications_log n
+           INNER JOIN keywords k ON k.id = n.keyword_id
+           WHERE n.sent_at > NOW() - INTERVAL '24 hours' AND k.user_id = $1`,
+          [userId],
+        )
+      : await this.dataSource.query("SELECT COUNT(*) FROM notifications_log WHERE sent_at > NOW() - INTERVAL '24 hours'");
+    const newListings24h = userId
+      ? await this.dataSource.query(
+          `SELECT COUNT(DISTINCT l.id) FROM listings l
+           INNER JOIN keyword_listings kl ON kl.listing_id = l.id
+           INNER JOIN keywords k ON k.id = kl.keyword_id
+           WHERE l.first_seen_at > NOW() - INTERVAL '24 hours' AND k.user_id = $1`,
+          [userId],
+        )
+      : await this.dataSource.query("SELECT COUNT(*) FROM listings WHERE first_seen_at > NOW() - INTERVAL '24 hours'");
     return {
       total_listings: totalListings,
       active_keywords: parseInt(totalKeywords[0].count),

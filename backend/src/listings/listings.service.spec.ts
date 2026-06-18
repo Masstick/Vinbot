@@ -14,11 +14,11 @@ function mockRepo<T>(overrides: Partial<any> = {}): T {
   } as unknown as T;
 }
 
-async function buildService(queryMock: jest.Mock) {
+async function buildService(queryMock: jest.Mock, listingRepoOverrides: Partial<Record<string, jest.Mock>> = {}) {
   const module = await Test.createTestingModule({
     providers: [
       ListingsService,
-      { provide: getRepositoryToken(Listing), useValue: mockRepo() },
+      { provide: getRepositoryToken(Listing), useValue: { ...mockRepo(), ...listingRepoOverrides } },
       { provide: getRepositoryToken(KeywordListing), useValue: mockRepo() },
       { provide: getRepositoryToken(PriceHistory), useValue: mockRepo() },
       { provide: DataSource, useValue: { query: queryMock } },
@@ -43,5 +43,24 @@ describe('ListingsService.getListings', () => {
     await svc.getListings({ keywordId: 3, soloSeller: false });
     const sql: string = queryMock.mock.calls[0][0];
     expect(sql).not.toContain('seller_item_count IS NOT NULL');
+  });
+
+  it('getListings adds a user_id filter to the WHERE clause when userId is provided', async () => {
+    const queryMock = jest.fn().mockResolvedValue([]);
+    const service = await buildService(queryMock);
+    await service.getListings({ userId: 7 });
+    expect(queryMock.mock.calls[0][0]).toContain('k.user_id = $');
+  });
+
+  it('getStats scopes active_keywords/alerts_24h/listings_24h by userId but keeps total_listings global', async () => {
+    const queryMock = jest
+      .fn()
+      .mockResolvedValueOnce([{ count: '2' }]) // active_keywords
+      .mockResolvedValueOnce([{ count: '1' }]) // alerts_24h
+      .mockResolvedValueOnce([{ count: '3' }]); // listings_24h
+    const service = await buildService(queryMock, { count: jest.fn().mockResolvedValue(999) });
+    const stats = await service.getStats(7);
+    expect(stats.total_listings).toBe(999);
+    expect(queryMock.mock.calls[0][0]).toContain('k.user_id');
   });
 });
