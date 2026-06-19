@@ -184,6 +184,7 @@ export class ScraperService implements OnModuleInit {
                 url: listing.url ?? null,
                 keywordLabel: keyword.label,
                 vintedCreatedAt: listing.vinted_created_at ? listing.vinted_created_at.toISOString() : null,
+                userId: keyword.user_id,
               });
               await this.maybeAlertNewListing(listing, keyword, countryCode);
             }
