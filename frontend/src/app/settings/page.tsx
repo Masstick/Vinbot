@@ -1,17 +1,24 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { useCurrentUser } from '@/lib/CurrentUserContext';
+import UsersPanel from '@/components/UsersPanel';
 import { Settings, Send, Bot, Check, AlertCircle, Info, Terminal, Play, Pause } from 'lucide-react';
 
 export default function SettingsPage() {
+  const { activeUser } = useCurrentUser();
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; error?: string } | null>(null);
 
   async function testTelegram() {
+    if (!activeUser) {
+      setTestResult({ ok: false, error: 'Sélectionnez un profil avant de tester.' });
+      return;
+    }
     setTesting(true);
     setTestResult(null);
     try {
-      const res = await api.telegram.test();
+      const res = await api.telegram.test(activeUser.telegram_chat_id);
       setTestResult(res);
     } catch {
       setTestResult({ ok: false, error: 'Impossible de joindre l\'API' });
@@ -56,6 +63,9 @@ export default function SettingsPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-6">
+        {/* Users Panel */}
+        <UsersPanel />
+
         {/* Telegram Notifications Panel */}
         <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-6 space-y-5 backdrop-blur-md">
           <div className="flex items-center gap-3">
