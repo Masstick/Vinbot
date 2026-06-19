@@ -15,7 +15,7 @@ const SELLER_CHECK_TTL_MS = 6 * 60 * 60 * 1000; // 6h
 
 // Contrôle de disponibilité (annonces vendues/supprimées) : on re-vérifie chaque
 // annonce affichée au plus une fois par fenêtre, par lots, pour ménager Vinted.
-const AVAILABILITY_CHECK_TTL_SECONDS = 6 * 60 * 60;       // re-check d'une même annonce au plus toutes les 6h
+const AVAILABILITY_CHECK_TTL_SECONDS = 24 * 60 * 60;      // re-check d'une même annonce au plus 1×/jour
 const AVAILABILITY_STALE_SECONDS = 30 * 60;              // on ne vérifie que les annonces non revues depuis 30 min
 const AVAILABILITY_RECENCY_SECONDS = 14 * 24 * 60 * 60;  // borne aux annonces vues pour la 1re fois < 14 jours
 const AVAILABILITY_BATCH_SIZE = 40;                      // annonces enfilées par tick (sous le plafond 1 req/s)
@@ -66,7 +66,9 @@ export class ScraperService implements OnModuleInit {
   ) {
     // 1 vérif/sec max : la vérification profil est secondaire, on ménage Vinted.
     this.sellerQueue = new AsyncQueue(this.processSellerCheck.bind(this), 1, 1);
-    this.availabilityQueue = new AsyncQueue(this.processAvailabilityCheck.bind(this), 1, 1);
+    // Concurrence 3 : la page item (~2 Mo) prend quelques secondes, le facteur limitant
+    // est la latence par requête (pas le rate-limit), d'où plusieurs vérifs en parallèle.
+    this.availabilityQueue = new AsyncQueue(this.processAvailabilityCheck.bind(this), 3, 3);
   }
 
   async onModuleInit() {
