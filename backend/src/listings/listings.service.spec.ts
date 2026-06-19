@@ -52,6 +52,15 @@ describe('ListingsService.getListings', () => {
     expect(queryMock.mock.calls[0][0]).toContain('k.user_id = $');
   });
 
+  it('filters listings by the keyword current min/max price bounds', async () => {
+    const queryMock = jest.fn().mockResolvedValue([]);
+    const service = await buildService(queryMock);
+    await service.getListings({});
+    const sql: string = queryMock.mock.calls[0][0];
+    expect(sql).toContain('k.min_price IS NULL OR l.price >= k.min_price');
+    expect(sql).toContain('k.max_price IS NULL OR l.price <= k.max_price');
+  });
+
   it('getStats scopes active_keywords/alerts_24h/listings_24h by userId but keeps total_listings global', async () => {
     const queryMock = jest
       .fn()

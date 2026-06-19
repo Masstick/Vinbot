@@ -103,6 +103,11 @@ export class ListingsService {
       where.push(`kl.seller_item_count IS NOT NULL AND kl.seller_item_count <= 1`);
     }
     if (opts.userId) { params.push(opts.userId); where.push(`k.user_id = $${params.length}`); }
+    // On respecte les bornes de prix ACTUELLES du mot-clé : si on modifie une recherche
+    // en cours (ex. baisse du prix max), les annonces désormais hors budget disparaissent
+    // de la page, même si elles avaient été collectées avant le changement.
+    where.push(`(k.min_price IS NULL OR l.price >= k.min_price)`);
+    where.push(`(k.max_price IS NULL OR l.price <= k.max_price)`);
     params.push(limit, offset);
     // DISTINCT ON : une seule ligne par annonce même si elle matche plusieurs mots-clés
     const sql = `
