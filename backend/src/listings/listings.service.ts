@@ -70,7 +70,13 @@ export class ListingsService {
       await this.historyRepo.save({ listing_id: listing.id, price: item.price });
     } else {
       listing = existing;
-      await this.listingRepo.update(existing.id, { last_seen_at: new Date() });
+      // Une annonce revue dans la recherche est forcément de nouveau disponible :
+      // on lève un éventuel masquage "vendue/supprimée" posé précédemment.
+      await this.listingRepo.update(existing.id, {
+        last_seen_at: new Date(),
+        unavailable_at: null,
+        unavailable_reason: null,
+      });
       if (parseFloat(String(existing.price)) !== item.price) {
         priceChanged = true;
         await this.listingRepo.update(existing.id, { price: item.price });
@@ -103,6 +109,8 @@ export class ListingsService {
       where.push(`kl.seller_item_count IS NOT NULL AND kl.seller_item_count <= 1`);
     }
     if (opts.userId) { params.push(opts.userId); where.push(`k.user_id = $${params.length}`); }
+    // On masque les annonces détectées comme vendues/supprimées (vérif item API).
+    where.push(`l.unavailable_at IS NULL`);
     // On respecte les bornes de prix ACTUELLES du mot-clé : si on modifie une recherche
     // en cours (ex. baisse du prix max), les annonces désormais hors budget disparaissent
     // de la page, même si elles avaient été collectées avant le changement.
@@ -127,6 +135,37 @@ export class ListingsService {
       LIMIT $${params.length - 1} OFFSET $${params.length}
     `;
     return this.dataSource.query(sql, params);
+  }
+
+  /**
+   * Annonces disponibles à (re)vérifier en priorité : jamais vérifiées d'abord,
+   * puis les moins récemment vérifiées. Sert au job de contrôle de disponibilité.
+   */
+  async getListingsToVerify(limit: number, ttlSeconds: number): Promise<{ id: number; vinted_id: number; country_code: string | null }[]> {
+    return this.dataSource.query(
+      `SELECT id, vinted_id, country_code FROM listings
+       WHERE unavailable_at IS NULL
+         AND (availability_checked_at IS NULL OR availability_checked_at < NOW() - ($1 || ' seconds')::interval)
+       ORDER BY availability_checked_at ASC NULLS FIRST, first_seen_at DESC
+       LIMIT $2`,
+      [ttlSeconds, limit],
+    );
+  }
+
+  /** Masque une annonce détectée vendue/supprimée (soft : reste en base, exclue de l'affichage). */
+  async markListingUnavailable(listingId: number, reason: 'sold' | 'gone'): Promise<void> {
+    await this.dataSource.query(
+      `UPDATE listings SET unavailable_at = NOW(), unavailable_reason = $2, availability_checked_at = NOW() WHERE id = $1`,
+      [listingId, reason],
+    );
+  }
+
+  /** Marque une annonce comme vérifiée (toujours disponible). */
+  async markListingChecked(listingId: number): Promise<void> {
+    await this.dataSource.query(
+      `UPDATE listings SET availability_checked_at = NOW() WHERE id = $1`,
+      [listingId],
+    );
   }
 
   async getPriceHistory(listingId: number): Promise<PriceHistory[]> {

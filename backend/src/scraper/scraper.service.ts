@@ -13,6 +13,12 @@ import { AsyncQueue } from './async-queue';
 // un même vendeur/mot-clé plus d'une fois par fenêtre, pour limiter les appels Vinted.
 const SELLER_CHECK_TTL_MS = 6 * 60 * 60 * 1000; // 6h
 
+// Contrôle de disponibilité (annonces vendues/supprimées) : on re-vérifie chaque
+// annonce affichée au plus une fois par fenêtre, par lots, pour ménager Vinted.
+const AVAILABILITY_CHECK_TTL_SECONDS = 30 * 60; // 30 min entre deux vérifs d'une même annonce
+const AVAILABILITY_BATCH_SIZE = 15;             // annonces enfilées par tick
+const AVAILABILITY_TICK_MS = 45_000;            // cadence d'enfilement
+
 function randInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
@@ -20,6 +26,12 @@ function randInt(min: number, max: number): number {
 interface SellerCheckItem {
   sellerId: number;
   keywordId: number;
+  countryCode: string;
+}
+
+interface AvailabilityCheckItem {
+  listingId: number;
+  vintedId: number;
   countryCode: string;
 }
 
@@ -40,6 +52,9 @@ export class ScraperService implements OnModuleInit {
   private readonly sellerCheckInFlight = new Set<string>();
   private readonly sellerCheckedAt = new Map<string, number>();
 
+  private readonly availabilityQueue: AsyncQueue<AvailabilityCheckItem>;
+  private readonly availabilityInFlight = new Set<number>();
+
   constructor(
     private readonly keywordsService: KeywordsService,
     private readonly listingsService: ListingsService,
@@ -49,12 +64,32 @@ export class ScraperService implements OnModuleInit {
   ) {
     // 1 vérif/sec max : la vérification profil est secondaire, on ménage Vinted.
     this.sellerQueue = new AsyncQueue(this.processSellerCheck.bind(this), 1, 1);
+    this.availabilityQueue = new AsyncQueue(this.processAvailabilityCheck.bind(this), 1, 1);
   }
 
   async onModuleInit() {
     await this.loadPausedState();
+    await this.ensureListingSchema();
     this.logger.log(`ScraperService initialisé — état : ${this.paused ? 'EN PAUSE' : 'actif'}, premier fast scan dans 5s`);
     setTimeout(() => this.scheduleFastTick(), 5000);
+    setTimeout(() => this.scheduleAvailabilityTick(), 20_000);
+  }
+
+  /**
+   * Crée les colonnes de disponibilité si absentes (pas de runner de migration).
+   * Idempotent : sûr à chaque démarrage.
+   */
+  private async ensureListingSchema(): Promise<void> {
+    try {
+      await this.dataSource.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS unavailable_at TIMESTAMPTZ`);
+      await this.dataSource.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS unavailable_reason VARCHAR(10)`);
+      await this.dataSource.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS availability_checked_at TIMESTAMPTZ`);
+      await this.dataSource.query(
+        `CREATE INDEX IF NOT EXISTS idx_listings_availability ON listings (unavailable_at, availability_checked_at)`,
+      );
+    } catch (err: any) {
+      this.logger.error(`[Schema] colonnes de disponibilité non créées : ${err.message}`);
+    }
   }
 
   /**
@@ -153,6 +188,53 @@ export class ScraperService implements OnModuleInit {
     }
   }
 
+  // ── Contrôle de disponibilité des annonces (vendues / supprimées) ──────────────
+  private scheduleAvailabilityTick(): void {
+    this.enqueueAvailabilityChecks()
+      .catch(err => this.logger.warn(`[Availability] tick: ${err.message}`))
+      .finally(() => {
+        setTimeout(() => this.scheduleAvailabilityTick(), AVAILABILITY_TICK_MS);
+      });
+  }
+
+  private async enqueueAvailabilityChecks(): Promise<void> {
+    if (this.paused) return; // pas de charge Vinted supplémentaire pendant une pause
+    const candidates = await this.listingsService.getListingsToVerify(
+      AVAILABILITY_BATCH_SIZE,
+      AVAILABILITY_CHECK_TTL_SECONDS,
+    );
+    for (const c of candidates) {
+      if (this.availabilityInFlight.has(c.id)) continue;
+      this.availabilityInFlight.add(c.id);
+      this.availabilityQueue
+        .push({ listingId: c.id, vintedId: Number(c.vinted_id), countryCode: c.country_code ?? 'fr' })
+        .catch(() => {});
+    }
+  }
+
+  private async processAvailabilityCheck(item: AvailabilityCheckItem): Promise<void> {
+    try {
+      const client = this.clientPool.getClient(item.countryCode);
+      const status = await client.getItemStatus(item.vintedId);
+      if (status === 'gone' || status === 'sold') {
+        await this.listingsService.markListingUnavailable(item.listingId, status);
+        this.logger.log(`[Availability] annonce ${item.listingId} (vinted ${item.vintedId}) → ${status}, masquée`);
+      } else if (status === 'active') {
+        await this.listingsService.markListingChecked(item.listingId);
+      }
+      // status null → erreur transitoire : on ne conclut rien, recheck au prochain cycle
+    } catch (err: any) {
+      if (err.message === 'BANNED') {
+        this.logger.warn('[Availability] bloqué par Vinted — pause 60s');
+        await this.delay(60_000);
+      } else {
+        this.logger.warn(`[Availability] annonce ${item.listingId}: ${err.message}`);
+      }
+    } finally {
+      this.availabilityInFlight.delete(item.listingId);
+    }
+  }
+
   private async runFastScan(): Promise<void> {
     if (this.paused) return;
     const keywords = await this.keywordsService.findActive();
@@ -227,6 +309,7 @@ export class ScraperService implements OnModuleInit {
       activeKeywords: keywords.length,
       queueStats: {
         seller: this.sellerQueue.getStats(),
+        availability: this.availabilityQueue.getStats(),
       },
       keywords: keywords.map(kw => ({
         id: kw.id,

@@ -52,6 +52,13 @@ describe('ListingsService.getListings', () => {
     expect(queryMock.mock.calls[0][0]).toContain('k.user_id = $');
   });
 
+  it('excludes listings marked unavailable (sold/deleted)', async () => {
+    const queryMock = jest.fn().mockResolvedValue([]);
+    const service = await buildService(queryMock);
+    await service.getListings({});
+    expect(queryMock.mock.calls[0][0]).toContain('l.unavailable_at IS NULL');
+  });
+
   it('filters listings by the keyword current min/max price bounds', async () => {
     const queryMock = jest.fn().mockResolvedValue([]);
     const service = await buildService(queryMock);

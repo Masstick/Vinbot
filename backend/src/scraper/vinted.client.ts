@@ -166,6 +166,40 @@ export class VintedClient {
   }
 
   /**
+   * Vérifie l'état d'une annonce via l'item API.
+   *  - 'gone'   : 404/410 → annonce supprimée (ne mène plus à aucune page)
+   *  - 'sold'   : annonce fermée/masquée (transaction terminée → "produit vendu")
+   *  - 'active' : toujours en vente
+   *  - null     : erreur transitoire (on ne conclut rien, recheck plus tard)
+   */
+  async getItemStatus(itemId: number): Promise<'active' | 'sold' | 'gone' | null> {
+    await this.initSession();
+    try {
+      const response = await this.client.get(`${this.baseUrl}/api/v2/items/${itemId}`, {
+        headers: {
+          Accept: 'application/json, text/plain, */*',
+          Referer: `${this.baseUrl}/items/${itemId}`,
+        },
+        timeout: 15000,
+      });
+      const item = response.data?.item ?? response.data ?? {};
+      // is_closed : transaction terminée (vendue). is_hidden/is_visible=false : retirée de la vente.
+      if (item.is_closed === true || item.is_hidden === true || item.is_visible === false) return 'sold';
+      return 'active';
+    } catch (err: any) {
+      const status = err.response?.status;
+      if (status === 404 || status === 410) return 'gone';
+      if (status === 403) {
+        this.logger.warn(`Vinted 403 [${this.countryCode}] item ${itemId} — reset session`);
+        this.resetSession();
+        throw new Error('BANNED');
+      }
+      this.logger.warn(`Erreur getItemStatus [${this.countryCode}] item ${itemId}: ${err.message}`);
+      return null;
+    }
+  }
+
+  /**
    * Filtre de pertinence : TOUS les termes de la recherche doivent être présents
    * dans le titre (logique ET). Une normalisation unifie les variantes d'unités
    * (8 Go = 8gb = 8 GB, ddr 4 = ddr4, 3200 mhz = 3200mhz) pour ne pas écarter

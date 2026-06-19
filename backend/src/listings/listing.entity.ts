@@ -56,4 +56,16 @@ export class Listing {
 
   @Column({ type: 'timestamptz', nullable: true })
   vinted_created_at: Date | null;
+
+  /** Date de détection comme vendue/supprimée (null = disponible, affichée). */
+  @Column({ type: 'timestamptz', nullable: true })
+  unavailable_at: Date | null;
+
+  /** Raison d'indisponibilité : 'sold' (vendue/fermée) ou 'gone' (404 supprimée). */
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  unavailable_reason: string | null;
+
+  /** Dernière vérification de disponibilité via l'item API (null = jamais vérifiée). */
+  @Column({ type: 'timestamptz', nullable: true })
+  availability_checked_at: Date | null;
 }

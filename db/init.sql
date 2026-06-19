@@ -39,7 +39,10 @@ CREATE TABLE IF NOT EXISTS listings (
   favourite_count INTEGER,
   first_seen_at   TIMESTAMPTZ DEFAULT NOW(),
   last_seen_at    TIMESTAMPTZ DEFAULT NOW(),
-  vinted_created_at TIMESTAMPTZ
+  vinted_created_at TIMESTAMPTZ,
+  unavailable_at  TIMESTAMPTZ,
+  unavailable_reason VARCHAR(10),
+  availability_checked_at TIMESTAMPTZ
 );
 
 CREATE TABLE IF NOT EXISTS keyword_listings (
@@ -85,3 +88,4 @@ CREATE INDEX IF NOT EXISTS idx_listings_vinted_created_at ON listings(vinted_cre
 CREATE INDEX IF NOT EXISTS idx_kl_seller_item_count ON keyword_listings(seller_item_count);
 CREATE INDEX IF NOT EXISTS idx_listings_seller_country ON listings(seller_country);
 CREATE INDEX IF NOT EXISTS idx_keywords_user_id ON keywords(user_id);
+CREATE INDEX IF NOT EXISTS idx_listings_availability ON listings (unavailable_at, availability_checked_at);
