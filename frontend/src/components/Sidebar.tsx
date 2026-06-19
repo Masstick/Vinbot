@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Tags, Settings, Menu, X, Bot, Newspaper } from 'lucide-react';
 import UserPicker from './UserPicker';
+import { ScraperStatus } from './ScraperStatus';
 
 const navLinks = [
   { href: '/listings', label: 'Dernières annonces', icon: Newspaper },
@@ -99,16 +100,7 @@ export function Sidebar() {
 
         {/* Sidebar Footer with Status */}
         <div className="p-4 border-t border-zinc-800/80 bg-zinc-950/20">
-          <div className="flex items-center gap-3 p-3 rounded-xl bg-zinc-950/40 border border-zinc-800/40">
-            <div className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-zinc-200">Surveillance active</p>
-              <p className="text-[10px] text-zinc-500 truncate">Scraper opérationnel</p>
-            </div>
-          </div>
+          <ScraperStatus />
         </div>
       </aside>
     </>
