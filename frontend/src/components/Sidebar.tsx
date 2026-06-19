@@ -3,6 +3,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Tags, Settings, Menu, X, Bot, Newspaper, Radio } from 'lucide-react';
+import UserPicker from './UserPicker';
 
 const navLinks = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -63,6 +64,9 @@ export function Sidebar() {
               <span className="block text-[10px] text-zinc-500 font-mono tracking-widest uppercase">v1.2.0</span>
             </div>
           </div>
+
+          {/* User Picker */}
+          <UserPicker />
 
           {/* Navigation Links */}
           <nav className="space-y-1">
