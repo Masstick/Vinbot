@@ -11,12 +11,19 @@ export class KeywordsService {
     private readonly repo: Repository<Keyword>,
   ) {}
 
-  findAll(): Promise<Keyword[]> {
-    return this.repo.find({ order: { created_at: 'DESC' } });
+  findAll(userId?: number): Promise<Keyword[]> {
+    return this.repo.find({
+      where: userId ? { user_id: userId } : {},
+      order: { created_at: 'DESC' },
+    });
   }
 
   findActive(): Promise<Keyword[]> {
-    return this.repo.find({ where: { active: true }, order: { id: 'ASC' } });
+    return this.repo.find({
+      where: { active: true },
+      relations: ['user'],
+      order: { id: 'ASC' },
+    });
   }
 
   async findOne(id: number): Promise<Keyword> {

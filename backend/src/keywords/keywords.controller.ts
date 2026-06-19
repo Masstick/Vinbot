@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, ParseIntPipe, ValidationPipe } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, ParseIntPipe, Query, ValidationPipe } from '@nestjs/common';
 import { KeywordsService } from './keywords.service';
 import { CreateKeywordDto } from './dto/create-keyword.dto';
 import { DealsGateway } from '../notifications/deals.gateway';
@@ -11,8 +11,8 @@ export class KeywordsController {
   ) {}
 
   @Get()
-  findAll() {
-    return this.service.findAll();
+  findAll(@Query('user_id') userId?: string) {
+    return this.service.findAll(userId ? Number(userId) : undefined);
   }
 
   @Get(':id')

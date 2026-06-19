@@ -2,6 +2,11 @@ import { IsString, IsOptional, IsNumber, IsBoolean, Min, Max } from 'class-valid
 import { Type } from 'class-transformer';
 
 export class CreateKeywordDto {
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  user_id: number;
+
   @IsString()
   label: string;
 
