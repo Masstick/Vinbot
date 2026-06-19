@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { Keyword, api } from '@/lib/api';
+import { useCurrentUser } from '@/lib/CurrentUserContext';
 import { Check, AlertCircle, HelpCircle, Globe } from 'lucide-react';
 
 const AVAILABLE_COUNTRIES: { code: string; label: string; flag: string }[] = [
@@ -22,6 +23,7 @@ interface Props {
 }
 
 export function KeywordForm({ initial, onSaved, onCancel }: Props) {
+  const { activeUserId } = useCurrentUser();
   const [form, setForm] = useState({
     label: initial?.label ?? '',
     search_text: initial?.search_text ?? '',
@@ -42,6 +44,11 @@ export function KeywordForm({ initial, onSaved, onCancel }: Props) {
     e.preventDefault();
     setLoading(true);
     setError('');
+    if (activeUserId == null) {
+      setError('Sélectionnez un profil avant de créer un mot-clé.');
+      setLoading(false);
+      return;
+    }
     try {
       const payload = {
         ...form,
@@ -51,6 +58,7 @@ export function KeywordForm({ initial, onSaved, onCancel }: Props) {
         category: form.category || null,
         catalog_id: form.catalog_id === '' ? null : Number(form.catalog_id),
         country_codes: form.country_codes.length > 0 ? form.country_codes : ['fr'],
+        user_id: activeUserId,
       };
       const kw = initial?.id
         ? await api.keywords.update(initial.id, payload)
