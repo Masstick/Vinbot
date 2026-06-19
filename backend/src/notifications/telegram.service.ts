@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThan } from 'typeorm';
@@ -11,22 +11,22 @@ import { Keyword } from '../keywords/keyword.entity';
 export class TelegramService {
   private readonly logger = new Logger(TelegramService.name);
   private readonly token: string;
-  private readonly chatId: string;
 
   constructor(
-    private readonly config: ConfigService,
+    @Optional() private readonly config?: ConfigService,
+    @Optional()
     @InjectRepository(NotificationLog)
-    private readonly logRepo: Repository<NotificationLog>,
+    private readonly logRepo?: Repository<NotificationLog>,
   ) {
-    this.token = this.config.get('TELEGRAM_BOT_TOKEN') ?? '';
-    this.chatId = this.config.get('TELEGRAM_CHAT_ID') ?? '';
+    this.token = this.config?.get('TELEGRAM_BOT_TOKEN') ?? process.env.TELEGRAM_BOT_TOKEN ?? '';
   }
 
   private get configured(): boolean {
-    return !!(this.token && this.chatId);
+    return !!this.token;
   }
 
   async alreadyNotified(listingId: number, keywordId: number): Promise<boolean> {
+    if (!this.logRepo) return false;
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const existing = await this.logRepo.findOne({
       where: { listing_id: listingId, keyword_id: keywordId, sent_at: MoreThan(since) },
@@ -35,8 +35,13 @@ export class TelegramService {
   }
 
   async sendListingAlert(listing: Listing, keyword: Keyword, countryCode: string): Promise<void> {
+    const chatId = keyword.user?.telegram_chat_id;
     if (!this.configured) {
       this.logger.warn('Telegram non configuré — alerte ignorée');
+      return;
+    }
+    if (!chatId) {
+      this.logger.warn(`Skipping Telegram alert for keyword "${keyword.label}": owner has no telegram_chat_id`);
       return;
     }
     if (await this.alreadyNotified(listing.id, keyword.id)) return;
@@ -56,32 +61,39 @@ export class TelegramService {
     try {
       if (listing.photo_url) {
         await axios.post(`https://api.telegram.org/bot${this.token}/sendPhoto`, {
-          chat_id: this.chatId,
+          chat_id: chatId,
           photo: listing.photo_url,
           caption,
           parse_mode: 'MarkdownV2',
         });
       } else {
         await axios.post(`https://api.telegram.org/bot${this.token}/sendMessage`, {
-          chat_id: this.chatId,
+          chat_id: chatId,
           text: caption,
           parse_mode: 'MarkdownV2',
           disable_web_page_preview: false,
         });
       }
 
-      await this.logRepo.save({ listing_id: listing.id, keyword_id: keyword.id });
+      if (this.logRepo) {
+        await this.logRepo.save({ listing_id: listing.id, keyword_id: keyword.id });
+      }
       this.logger.log(`Alerte Telegram envoyée : listing ${listing.id} / keyword ${keyword.id}`);
     } catch (err: any) {
       this.logger.error(`Erreur Telegram: ${err.response?.data?.description ?? err.message}`);
     }
   }
 
-  async sendTest(): Promise<{ ok: boolean; error?: string }> {
-    if (!this.configured) return { ok: false, error: 'TELEGRAM_BOT_TOKEN ou TELEGRAM_CHAT_ID manquant' };
+  async sendTest(chatId: string): Promise<{ ok: boolean; error?: string }> {
+    if (!this.configured) {
+      return { ok: false, error: 'TELEGRAM_BOT_TOKEN manquant' };
+    }
+    if (!chatId) {
+      return { ok: false, error: 'Aucun chat_id fourni' };
+    }
     try {
       await axios.post(`https://api.telegram.org/bot${this.token}/sendMessage`, {
-        chat_id: this.chatId,
+        chat_id: chatId,
         text: '✅ Vinbot connecté — les alertes Vinted arriveront ici\\!',
         parse_mode: 'MarkdownV2',
       });

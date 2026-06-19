@@ -1,4 +1,4 @@
-import { Controller, Post } from '@nestjs/common';
+import { Body, Controller, Post } from '@nestjs/common';
 import { TelegramService } from './telegram.service';
 
 @Controller('telegram')
@@ -6,7 +6,7 @@ export class TelegramController {
   constructor(private readonly service: TelegramService) {}
 
   @Post('test')
-  test() {
-    return this.service.sendTest();
+  test(@Body('chat_id') chatId: string) {
+    return this.service.sendTest(chatId);
   }
 }
