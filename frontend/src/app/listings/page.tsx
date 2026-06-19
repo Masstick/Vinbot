@@ -1,14 +1,17 @@
 'use client';
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { api, KeywordListing, Keyword } from '@/lib/api';
+import { api, KeywordListing, Keyword, Listing } from '@/lib/api';
 import { DealCard } from '@/components/DealCard';
 import { Newspaper, Filter, Search, Clock, Globe, RefreshCw, ChevronDown, UserCheck } from 'lucide-react';
 import { useKeywordChanged } from '@/lib/useKeywordChanged';
 import { useRefreshSignal } from '@/lib/refreshEvent';
+import { useListingsSocket } from '@/lib/useListingsSocket';
+import { ListingEvent } from '@/lib/listingEvent';
 import { useCurrentUser } from '@/lib/CurrentUserContext';
 
 const PAGE_SIZE = 48;
 const FILTERS_KEY = 'vinbot_listings_filters';
+const LIVE_BADGE_MS = 60_000; // durée d'affichage du badge LIVE sur une annonce poussée
 
 interface StoredFilters {
   selectedKw?: number;
@@ -25,6 +28,32 @@ function loadStoredFilters(): StoredFilters {
   } catch {
     return {};
   }
+}
+
+/** Convertit un événement WebSocket en KeywordListing pour réutiliser DealCard. */
+function eventToKeywordListing(ev: ListingEvent): KeywordListing {
+  const now = new Date().toISOString();
+  return {
+    keyword_id: -1,
+    listing_id: ev.listingId,
+    matched_at: now,
+    keyword: { label: ev.keywordLabel } as Keyword,
+    listing: {
+      id: ev.listingId,
+      vinted_id: 0,
+      title: ev.title,
+      price: ev.price,
+      url: ev.url,
+      photo_url: ev.photoUrl,
+      brand: null,
+      size_label: null,
+      condition_label: null,
+      seller_name: null,
+      first_seen_at: now,
+      last_seen_at: now,
+      vinted_created_at: ev.vintedCreatedAt,
+    } as Listing,
+  };
 }
 
 const COUNTRY_LABELS: Record<string, string> = {
@@ -65,9 +94,15 @@ export default function LatestListingsPage() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [liveIds, setLiveIds] = useState<Set<number>>(new Set());
+  const [connected, setConnected] = useState(false);
   const offsetRef = useRef(0);
   const loadTickRef = useRef(0);
   const { activeUserId } = useCurrentUser();
+
+  const activeFilterCount =
+    [selectedKw != null, !!country, !!search, maxAgeHours != null, soloSeller].filter(Boolean).length;
 
   useEffect(() => {
     if (activeUserId == null) {
@@ -129,6 +164,60 @@ export default function LatestListingsPage() {
   useKeywordChanged(() => load(false));
   useRefreshSignal(() => load(true));
 
+  // ── Temps réel : on injecte en tête les nouvelles annonces poussées par le WS ──
+  const matchesFilters = useCallback((ev: ListingEvent): boolean => {
+    if (activeUserId != null && ev.userId !== activeUserId) return false;
+    // Pays et vendeur unique ne sont pas déductibles de l'event → on n'injecte pas en live dans ce cas
+    if (country || soloSeller) return false;
+    if (selectedKw != null) {
+      const kw = keywords.find(k => k.id === selectedKw);
+      if (kw && kw.label !== ev.keywordLabel) return false;
+    }
+    if (debouncedSearch && !(ev.title ?? '').toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
+    if (maxAgeHours != null) {
+      const ref = ev.vintedCreatedAt ?? new Date().toISOString();
+      const ageH = (Date.now() - new Date(ref).getTime()) / 3_600_000;
+      if (ageH > maxAgeHours) return false;
+    }
+    return true;
+  }, [activeUserId, country, soloSeller, selectedKw, keywords, debouncedSearch, maxAgeHours]);
+
+  const handleNewListing = useCallback((ev: ListingEvent) => {
+    if (!matchesFilters(ev)) return;
+    setItems(prev => {
+      if (prev.some(p => p.listing.id === ev.listingId)) return prev;
+      return [eventToKeywordListing(ev), ...prev];
+    });
+    setLiveIds(prev => {
+      const next = new Set(prev);
+      next.add(ev.listingId);
+      return next;
+    });
+    window.setTimeout(() => {
+      setLiveIds(prev => {
+        const next = new Set(prev);
+        next.delete(ev.listingId);
+        return next;
+      });
+    }, LIVE_BADGE_MS);
+  }, [matchesFilters]);
+
+  const socketRef = useListingsSocket(handleNewListing);
+
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket) return;
+    setConnected(socket.connected);
+    const onConnect = () => setConnected(true);
+    const onDisconnect = () => setConnected(false);
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    return () => {
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+    };
+  }, [socketRef]);
+
   const loadMore = () => {
     setLoadingMore(true);
     api.listings.latest({ ...baseParams(), offset: offsetRef.current })
@@ -145,7 +234,7 @@ export default function LatestListingsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Page Title */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -154,20 +243,54 @@ export default function LatestListingsPage() {
             Dernières annonces
           </h1>
           <p className="hidden sm:block text-sm text-zinc-400 mt-1">
-            Toutes les annonces détectées, des plus récentes aux plus anciennes. Actualisation auto toutes les 30s.
+            Annonces détectées en temps réel, des plus récentes aux plus anciennes.
           </p>
         </div>
-        <button
-          onClick={() => load(true)}
-          className="flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors shrink-0"
-        >
-          <RefreshCw size={13} />
-          <span className="hidden sm:inline">Actualiser</span>
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Live status */}
+          <span className="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800">
+            <span className="relative flex h-2 w-2">
+              {connected && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />}
+              <span className={`relative inline-flex rounded-full h-2 w-2 ${connected ? 'bg-emerald-500' : 'bg-zinc-600'}`} />
+            </span>
+            <span className={connected ? 'text-emerald-400' : 'text-zinc-500'}>{connected ? 'Live' : 'Hors ligne'}</span>
+          </span>
+          <button
+            onClick={() => load(true)}
+            className="flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors"
+          >
+            <RefreshCw size={13} />
+            <span className="hidden sm:inline">Actualiser</span>
+          </button>
+        </div>
       </div>
 
+      {/* Mobile filter toggle */}
+      <button
+        onClick={() => setFiltersOpen(o => !o)}
+        className="sm:hidden w-full flex items-center justify-between gap-2 bg-zinc-900/50 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm font-semibold text-zinc-300"
+      >
+        <span className="flex items-center gap-2">
+          <Filter size={14} className="text-indigo-400" />
+          Filtres
+          {activeFilterCount > 0 && (
+            <span className="text-[10px] font-bold bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded-full">
+              {activeFilterCount}
+            </span>
+          )}
+        </span>
+        <span className="flex items-center gap-2">
+          <span className="text-[11px] font-mono text-zinc-500">
+            {items.length}{hasMore ? '+' : ''}
+          </span>
+          <ChevronDown size={16} className={`transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />
+        </span>
+      </button>
+
       {/* Filters */}
-      <div className="bg-zinc-900/50 border border-zinc-800/80 p-4 sm:p-5 rounded-2xl flex flex-wrap gap-3 sm:gap-4 items-end backdrop-blur-md">
+      <div
+        className={`${filtersOpen ? 'flex' : 'hidden'} sm:flex bg-zinc-900/50 border border-zinc-800/80 p-4 sm:p-5 rounded-2xl flex-wrap gap-3 sm:gap-4 items-end backdrop-blur-md`}
+      >
         {/* Search */}
         <div className="flex-1 min-w-[200px]">
           <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
@@ -242,7 +365,7 @@ export default function LatestListingsPage() {
         <div className="w-full sm:w-auto flex items-end">
           <button
             onClick={() => setSoloSeller(v => !v)}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${
+            className={`w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${
               soloSeller
                 ? 'bg-indigo-500/10 border-indigo-500 text-indigo-300'
                 : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-600'
@@ -253,8 +376,8 @@ export default function LatestListingsPage() {
           </button>
         </div>
 
-        {/* Results count */}
-        <div className="h-10 flex items-center px-4 rounded-xl bg-zinc-950 text-xs font-mono border border-zinc-800 text-zinc-400 ml-auto justify-center">
+        {/* Results count (desktop) */}
+        <div className="hidden sm:flex h-10 items-center px-4 rounded-xl bg-zinc-950 text-xs font-mono border border-zinc-800 text-zinc-400 ml-auto justify-center">
           {items.length}{hasMore ? '+' : ''} annonce{items.length !== 1 ? 's' : ''}
         </div>
       </div>
@@ -280,7 +403,7 @@ export default function LatestListingsPage() {
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             {items.map(kl => (
-              <DealCard key={`${kl.keyword_id}-${kl.listing.id}`} kl={kl} />
+              <DealCard key={`${kl.keyword_id}-${kl.listing.id}`} kl={kl} live={liveIds.has(kl.listing.id)} />
             ))}
           </div>
 

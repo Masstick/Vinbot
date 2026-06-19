@@ -2,13 +2,12 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Tags, Settings, Menu, X, Bot, Newspaper, Radio } from 'lucide-react';
+import { LayoutDashboard, Tags, Settings, Menu, X, Bot, Newspaper } from 'lucide-react';
 import UserPicker from './UserPicker';
 
 const navLinks = [
   { href: '/listings', label: 'Dernières annonces', icon: Newspaper },
   { href: '/dashboard', label: 'Statistiques', icon: LayoutDashboard },
-  { href: '/live', label: 'Live', icon: Radio },
   { href: '/keywords', label: 'Mots-clés', icon: Tags },
   { href: '/settings', label: 'Réglages', icon: Settings },
 ];

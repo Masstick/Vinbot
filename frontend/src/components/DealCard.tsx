@@ -97,9 +97,10 @@ function countryFlag(code: string): string | null {
 
 interface Props {
   kl: KeywordListing;
+  live?: boolean;
 }
 
-export function DealCard({ kl }: Props) {
+export function DealCard({ kl, live }: Props) {
   const { listing, keyword } = kl;
   const price = listing.price ? parseFloat(String(listing.price)) : null;
 
@@ -108,7 +109,11 @@ export function DealCard({ kl }: Props) {
   const flag = flagCode ? countryFlag(flagCode) : null;
 
   return (
-    <div className="group bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden hover:border-zinc-700/80 hover:shadow-xl transition-all duration-300 hover:scale-[1.01] flex flex-col h-full">
+    <div
+      className={`group bg-zinc-900/60 border rounded-2xl overflow-hidden hover:shadow-xl transition-all duration-300 hover:scale-[1.01] flex flex-col h-full ${
+        live ? 'border-red-500/50 shadow-[0_0_20px_-6px_rgba(244,63,94,0.4)]' : 'border-zinc-800/80 hover:border-zinc-700/80'
+      }`}
+    >
       {/* Product Image */}
       <div className="relative aspect-[3/2] bg-zinc-950 overflow-hidden w-full shrink-0">
         <Link href={`/listings/${listing.id}`}>
@@ -133,6 +138,17 @@ export function DealCard({ kl }: Props) {
         <span className="absolute top-2.5 left-2.5 backdrop-blur-md">
           <FreshnessBadge hours={freshnessHours} />
         </span>
+
+        {/* Live badge (top right) — annonce poussée en temps réel */}
+        {live && (
+          <span className="absolute top-2.5 right-2.5 flex items-center gap-1 text-[10px] font-black tracking-wide px-2 py-0.5 rounded-lg bg-red-500/90 text-white shadow-lg backdrop-blur-md">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white"></span>
+            </span>
+            LIVE
+          </span>
+        )}
 
         {/* Keyword label overlay (bottom left) */}
         <span className="absolute bottom-2 left-2 text-[10px] font-medium tracking-wide uppercase px-2 py-0.5 rounded bg-zinc-950/80 text-zinc-400 border border-zinc-800/80 backdrop-blur-md">
