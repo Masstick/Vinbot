@@ -12,7 +12,7 @@ C'est le 2e sous-projet de la décomposition validée plus tôt dans la session 
 - **Un `chat_id` Telegram par utilisateur.** Le bot Telegram reste unique (`TELEGRAM_BOT_TOKEN` global, inchangé) ; seule la destination des messages devient propre à chaque utilisateur.
 - **Petit nombre fixe d'utilisateurs (2-5), créés manuellement** par l'utilisateur via un petit écran dédié dans Réglages (pas d'inscription self-service).
 - **Le feed est filtré par profil sélectionné** : Dashboard, Live, Dernières annonces et Mots-clés ne montrent que les données liées aux mots-clés du profil actif.
-- **Le scraper continue de tourner sur tous les mots-clés actifs**, tous utilisateurs confondus, en une seule boucle de scan comme aujourd'hui. Seul le routage de l'alerte Telegram change : elle part vers le `chat_id` du propriétaire du mot-clé matché, plus le `chat_id` global.
+- **Le scraper continue de tourner sur tous les mots-clés actifs**, tous utilisateurs confondus, en une seule boucle de scan comme aujourd'hui. Seul le routage de l'alerte Telegram change : elle part uniquement vers le `chat_id` du propriétaire du mot-clé matché (pas de double-envoi vers un `chat_id` global — `TELEGRAM_CHAT_ID` n'est plus utilisé pour le routage des alertes, seulement pour la valeur de backfill du user `Principal`).
 
 ## Architecture
 
