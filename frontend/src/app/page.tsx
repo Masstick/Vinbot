@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { api, Stats } from '@/lib/api';
 import { useKeywordChanged } from '@/lib/useKeywordChanged';
+import { useCurrentUser } from '@/lib/CurrentUserContext';
 import { RefreshCw, Database, Hash, Bell, Bot, Calendar, Sparkles } from 'lucide-react';
 
 function ScraperStatusBar({ status }: { status: any }) {
@@ -94,18 +95,19 @@ export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [scraperStatus, setScraperStatus] = useState<any>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const { activeUserId } = useCurrentUser();
 
   const loadData = useCallback((showIndicator = false) => {
     if (showIndicator) setRefreshing(true);
     Promise.all([
-      api.listings.stats().catch(() => null),
+      api.listings.stats(activeUserId ?? undefined).catch(() => null),
       api.scraper.status().catch(() => null),
     ]).then(([s, sc]) => {
       setStats(s);
       setScraperStatus(sc);
       setRefreshing(false);
     });
-  }, []);
+  }, [activeUserId]);
 
   useEffect(() => {
     loadData();

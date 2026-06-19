@@ -6,4 +6,5 @@ export interface ListingEvent {
   url: string | null;
   keywordLabel: string;
   vintedCreatedAt: string | null;
+  userId: number;
 }

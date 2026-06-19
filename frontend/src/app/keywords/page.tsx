@@ -1,7 +1,8 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api, Keyword } from '@/lib/api';
 import { KeywordForm } from '@/components/KeywordForm';
+import { useCurrentUser } from '@/lib/CurrentUserContext';
 import { Tags, Plus, Pencil, Trash2, ToggleLeft, ToggleRight, Radio, Search, Coins, Clock } from 'lucide-react';
 
 export default function KeywordsPage() {
@@ -9,11 +10,20 @@ export default function KeywordsPage() {
   const [editing, setEditing] = useState<Keyword | null>(null);
   const [creating, setCreating] = useState(false);
   const [loading, setLoading] = useState(true);
+  const { activeUserId } = useCurrentUser();
 
-  const load = () => api.keywords.list().then(setKeywords).catch(() => {}).finally(() => setLoading(false));
+  const load = useCallback(() => {
+    if (activeUserId == null) {
+      setKeywords([]);
+      setLoading(false);
+      return Promise.resolve();
+    }
+    return api.keywords.list(activeUserId).then(setKeywords).catch(() => {}).finally(() => setLoading(false));
+  }, [activeUserId]);
+
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   async function toggleActive(kw: Keyword) {
     await api.keywords.update(kw.id, { ...kw, active: !kw.active });

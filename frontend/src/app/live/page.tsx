@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useListingsSocket } from '@/lib/useListingsSocket';
 import { ListingEvent } from '@/lib/listingEvent';
+import { useCurrentUser } from '@/lib/CurrentUserContext';
 import { Radio, ExternalLink } from 'lucide-react';
 
 const MAX_ITEMS = 200;
@@ -70,14 +71,16 @@ export default function LivePage() {
   const [items, setItems] = useState<Array<ListingEvent & { receivedAt: string }>>([]);
   const [totalReceived, setTotalReceived] = useState(0);
   const [connected, setConnected] = useState(false);
+  const { activeUserId } = useCurrentUser();
 
   const handleListing = useCallback((listing: ListingEvent) => {
+    if (activeUserId != null && listing.userId !== activeUserId) return;
     setTotalReceived(n => n + 1);
     setItems(prev => [
       { ...listing, receivedAt: new Date().toISOString() },
       ...prev,
     ].slice(0, MAX_ITEMS));
-  }, []);
+  }, [activeUserId]);
 
   const socketRef = useListingsSocket(handleListing);
 

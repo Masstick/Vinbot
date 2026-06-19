@@ -4,6 +4,7 @@ import { api, KeywordListing, Keyword } from '@/lib/api';
 import { DealCard } from '@/components/DealCard';
 import { Newspaper, Filter, Search, Clock, Globe, RefreshCw, ChevronDown, UserCheck } from 'lucide-react';
 import { useKeywordChanged } from '@/lib/useKeywordChanged';
+import { useCurrentUser } from '@/lib/CurrentUserContext';
 
 const PAGE_SIZE = 48;
 
@@ -46,10 +47,15 @@ export default function LatestListingsPage() {
   const [hasMore, setHasMore] = useState(false);
   const offsetRef = useRef(0);
   const loadTickRef = useRef(0);
+  const { activeUserId } = useCurrentUser();
 
   useEffect(() => {
-    api.keywords.list().then(setKeywords).catch(() => {});
-  }, []);
+    if (activeUserId == null) {
+      setKeywords([]);
+      return;
+    }
+    api.keywords.list(activeUserId).then(setKeywords).catch(() => {});
+  }, [activeUserId]);
 
   // Debounce de la recherche texte (requête serveur)
   useEffect(() => {
@@ -63,8 +69,9 @@ export default function LatestListingsPage() {
     q: debouncedSearch || undefined,
     maxAgeHours,
     soloSeller: soloSeller || undefined,
+    userId: activeUserId ?? undefined,
     limit: PAGE_SIZE,
-  }), [selectedKw, country, debouncedSearch, maxAgeHours, soloSeller]);
+  }), [selectedKw, country, debouncedSearch, maxAgeHours, soloSeller, activeUserId]);
 
   const load = useCallback((showSpinner: boolean) => {
     if (showSpinner) setLoading(true);
