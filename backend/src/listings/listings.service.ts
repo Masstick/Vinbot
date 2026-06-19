@@ -138,20 +138,24 @@ export class ListingsService {
   }
 
   /**
-   * Annonces candidates au contrôle de disponibilité : uniquement celles NON revues
-   * récemment dans la recherche (staleSeconds) — une annonce encore en vente réapparaît
-   * dans les scans, donc reste "fraîche" et n'est jamais vérifiée (zéro faux positif).
-   * On priorise les plus anciennement vues (les plus susceptibles d'être vendues).
+   * Annonces candidates au contrôle de disponibilité :
+   *  - dans la fenêtre de récence (recencySeconds) : l'inventaire réellement navigable ;
+   *  - non revues récemment dans la recherche (staleSeconds) : une annonce encore en
+   *    vente réapparaît dans les scans donc reste "fraîche" et n'est jamais vérifiée
+   *    (zéro faux positif) ;
+   *  - jamais vérifiée, ou pas depuis ttlSeconds.
+   * Priorité aux annonces les plus récemment détectées (le haut de la page, le plus visible).
    */
-  async getListingsToVerify(limit: number, ttlSeconds: number, staleSeconds: number): Promise<{ id: number; vinted_id: number; country_code: string | null }[]> {
+  async getListingsToVerify(limit: number, ttlSeconds: number, staleSeconds: number, recencySeconds: number): Promise<{ id: number; vinted_id: number; country_code: string | null }[]> {
     return this.dataSource.query(
       `SELECT id, vinted_id, country_code FROM listings
        WHERE unavailable_at IS NULL
+         AND first_seen_at > NOW() - ($4 || ' seconds')::interval
          AND last_seen_at < NOW() - ($3 || ' seconds')::interval
          AND (availability_checked_at IS NULL OR availability_checked_at < NOW() - ($2 || ' seconds')::interval)
-       ORDER BY last_seen_at ASC
+       ORDER BY first_seen_at DESC
        LIMIT $1`,
-      [limit, ttlSeconds, staleSeconds],
+      [limit, ttlSeconds, staleSeconds, recencySeconds],
     );
   }
 

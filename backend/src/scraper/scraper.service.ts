@@ -15,10 +15,11 @@ const SELLER_CHECK_TTL_MS = 6 * 60 * 60 * 1000; // 6h
 
 // Contrôle de disponibilité (annonces vendues/supprimées) : on re-vérifie chaque
 // annonce affichée au plus une fois par fenêtre, par lots, pour ménager Vinted.
-const AVAILABILITY_CHECK_TTL_SECONDS = 30 * 60; // 30 min entre deux vérifs d'une même annonce
-const AVAILABILITY_STALE_SECONDS = 30 * 60;     // on ne vérifie que les annonces non revues depuis 30 min
-const AVAILABILITY_BATCH_SIZE = 15;             // annonces enfilées par tick
-const AVAILABILITY_TICK_MS = 45_000;            // cadence d'enfilement
+const AVAILABILITY_CHECK_TTL_SECONDS = 6 * 60 * 60;       // re-check d'une même annonce au plus toutes les 6h
+const AVAILABILITY_STALE_SECONDS = 30 * 60;              // on ne vérifie que les annonces non revues depuis 30 min
+const AVAILABILITY_RECENCY_SECONDS = 14 * 24 * 60 * 60;  // borne aux annonces vues pour la 1re fois < 14 jours
+const AVAILABILITY_BATCH_SIZE = 40;                      // annonces enfilées par tick (sous le plafond 1 req/s)
+const AVAILABILITY_TICK_MS = 45_000;                    // cadence d'enfilement
 
 function randInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -204,6 +205,7 @@ export class ScraperService implements OnModuleInit {
       AVAILABILITY_BATCH_SIZE,
       AVAILABILITY_CHECK_TTL_SECONDS,
       AVAILABILITY_STALE_SECONDS,
+      AVAILABILITY_RECENCY_SECONDS,
     );
     for (const c of candidates) {
       if (this.availabilityInFlight.has(c.id)) continue;
