@@ -166,31 +166,44 @@ export class VintedClient {
   }
 
   /**
-   * Vérifie l'état d'une annonce via l'item API.
+   * Vérifie l'état d'une annonce via sa PAGE web (pas l'API /items/{id}, qui renvoie
+   * 404 pour les annonces d'un autre marketplace que le domaine interrogé → faux
+   * positifs). La page, elle, suit la redirection cross-border et expose le statut
+   * réel dans son JSON embarqué.
    *  - 'gone'   : 404/410 → annonce supprimée (ne mène plus à aucune page)
-   *  - 'sold'   : annonce fermée/masquée (transaction terminée → "produit vendu")
-   *  - 'active' : toujours en vente
-   *  - null     : erreur transitoire (on ne conclut rien, recheck plus tard)
+   *  - 'sold'   : is_closed:true / item_closing_action:"sold" → vendue
+   *  - 'active' : is_closed:false → toujours en vente
+   *  - null     : indéterminé (page sans marqueur, erreur transitoire) → on ne conclut rien
    */
   async getItemStatus(itemId: number): Promise<'active' | 'sold' | 'gone' | null> {
     await this.initSession();
     try {
-      const response = await this.client.get(`${this.baseUrl}/api/v2/items/${itemId}`, {
+      const response = await this.client.get(`${this.baseUrl}/items/${itemId}`, {
         headers: {
-          Accept: 'application/json, text/plain, */*',
-          Referer: `${this.baseUrl}/items/${itemId}`,
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          Referer: `${this.baseUrl}/`,
         },
-        timeout: 15000,
+        timeout: 20000,
+        maxRedirects: 5,
+        responseType: 'text',
+        validateStatus: (s: number) => s < 500, // on inspecte 404 nous-mêmes
       });
-      const item = response.data?.item ?? response.data ?? {};
-      // is_closed : transaction terminée (vendue). is_hidden/is_visible=false : retirée de la vente.
-      if (item.is_closed === true || item.is_hidden === true || item.is_visible === false) return 'sold';
-      return 'active';
+      if (response.status === 404 || response.status === 410) return 'gone';
+      if (response.status === 403) {
+        this.logger.warn(`Vinted 403 [${this.countryCode}] item ${itemId} — reset session`);
+        this.resetSession();
+        throw new Error('BANNED');
+      }
+      if (response.status >= 400) return null;
+      const html: string = typeof response.data === 'string' ? response.data : String(response.data ?? '');
+      // Le JSON est embarqué échappé dans le HTML (is_closed\":true), d'où le backslash optionnel.
+      if (/is_closed\\?"\s*:\s*true/.test(html) || /item_closing_action\\?"\s*:\s*\\?"sold/.test(html)) return 'sold';
+      if (/is_closed\\?"\s*:\s*false/.test(html)) return 'active';
+      return null;
     } catch (err: any) {
       const status = err.response?.status;
       if (status === 404 || status === 410) return 'gone';
       if (status === 403) {
-        this.logger.warn(`Vinted 403 [${this.countryCode}] item ${itemId} — reset session`);
         this.resetSession();
         throw new Error('BANNED');
       }

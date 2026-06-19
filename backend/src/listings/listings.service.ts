@@ -138,17 +138,20 @@ export class ListingsService {
   }
 
   /**
-   * Annonces disponibles à (re)vérifier en priorité : jamais vérifiées d'abord,
-   * puis les moins récemment vérifiées. Sert au job de contrôle de disponibilité.
+   * Annonces candidates au contrôle de disponibilité : uniquement celles NON revues
+   * récemment dans la recherche (staleSeconds) — une annonce encore en vente réapparaît
+   * dans les scans, donc reste "fraîche" et n'est jamais vérifiée (zéro faux positif).
+   * On priorise les plus anciennement vues (les plus susceptibles d'être vendues).
    */
-  async getListingsToVerify(limit: number, ttlSeconds: number): Promise<{ id: number; vinted_id: number; country_code: string | null }[]> {
+  async getListingsToVerify(limit: number, ttlSeconds: number, staleSeconds: number): Promise<{ id: number; vinted_id: number; country_code: string | null }[]> {
     return this.dataSource.query(
       `SELECT id, vinted_id, country_code FROM listings
        WHERE unavailable_at IS NULL
-         AND (availability_checked_at IS NULL OR availability_checked_at < NOW() - ($1 || ' seconds')::interval)
-       ORDER BY availability_checked_at ASC NULLS FIRST, first_seen_at DESC
-       LIMIT $2`,
-      [ttlSeconds, limit],
+         AND last_seen_at < NOW() - ($3 || ' seconds')::interval
+         AND (availability_checked_at IS NULL OR availability_checked_at < NOW() - ($2 || ' seconds')::interval)
+       ORDER BY last_seen_at ASC
+       LIMIT $1`,
+      [limit, ttlSeconds, staleSeconds],
     );
   }
 
