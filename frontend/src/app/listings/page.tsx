@@ -7,6 +7,24 @@ import { useKeywordChanged } from '@/lib/useKeywordChanged';
 import { useCurrentUser } from '@/lib/CurrentUserContext';
 
 const PAGE_SIZE = 48;
+const FILTERS_KEY = 'vinbot_listings_filters';
+
+interface StoredFilters {
+  selectedKw?: number;
+  country?: string;
+  search?: string;
+  maxAgeHours?: number;
+  soloSeller?: boolean;
+}
+
+function loadStoredFilters(): StoredFilters {
+  if (typeof window === 'undefined') return {};
+  try {
+    return JSON.parse(window.localStorage.getItem(FILTERS_KEY) ?? '{}');
+  } catch {
+    return {};
+  }
+}
 
 const COUNTRY_LABELS: Record<string, string> = {
   fr: '🇫🇷 France', be: '🇧🇪 Belgique', es: '🇪🇸 Espagne', pl: '🇵🇱 Pologne',
@@ -36,12 +54,13 @@ function SkeletonCard() {
 export default function LatestListingsPage() {
   const [items, setItems] = useState<KeywordListing[]>([]);
   const [keywords, setKeywords] = useState<Keyword[]>([]);
-  const [selectedKw, setSelectedKw] = useState<number | undefined>();
-  const [country, setCountry] = useState<string>('');
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [maxAgeHours, setMaxAgeHours] = useState<number | undefined>();
-  const [soloSeller, setSoloSeller] = useState(false);
+  const initialFilters = useRef(loadStoredFilters());
+  const [selectedKw, setSelectedKw] = useState<number | undefined>(initialFilters.current.selectedKw);
+  const [country, setCountry] = useState<string>(initialFilters.current.country ?? '');
+  const [search, setSearch] = useState(initialFilters.current.search ?? '');
+  const [debouncedSearch, setDebouncedSearch] = useState(initialFilters.current.search ?? '');
+  const [maxAgeHours, setMaxAgeHours] = useState<number | undefined>(initialFilters.current.maxAgeHours);
+  const [soloSeller, setSoloSeller] = useState(initialFilters.current.soloSeller ?? false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
@@ -62,6 +81,12 @@ export default function LatestListingsPage() {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 400);
     return () => clearTimeout(t);
   }, [search]);
+
+  // Persiste les filtres (survit au reload / à la navigation)
+  useEffect(() => {
+    const filters: StoredFilters = { selectedKw, country, search, maxAgeHours, soloSeller };
+    window.localStorage.setItem(FILTERS_KEY, JSON.stringify(filters));
+  }, [selectedKw, country, search, maxAgeHours, soloSeller]);
 
   const baseParams = useCallback(() => ({
     keywordId: selectedKw,
