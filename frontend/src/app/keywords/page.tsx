@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, Keyword } from '@/lib/api';
 import { KeywordForm } from '@/components/KeywordForm';
+import { useRefreshSignal } from '@/lib/refreshEvent';
 import { useCurrentUser } from '@/lib/CurrentUserContext';
 import { Tags, Plus, Pencil, Trash2, ToggleLeft, ToggleRight, Radio, Search, Coins, Clock } from 'lucide-react';
 
@@ -25,6 +26,8 @@ export default function KeywordsPage() {
     load();
   }, [load]);
 
+  useRefreshSignal(() => load());
+
   async function toggleActive(kw: Keyword) {
     await api.keywords.update(kw.id, { ...kw, active: !kw.active });
     load();
@@ -45,21 +48,22 @@ export default function KeywordsPage() {
   return (
     <div className="space-y-6">
       {/* Header Row */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-black text-white tracking-tight flex items-center gap-2">
-            <Tags className="text-indigo-400" size={26} />
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-2">
+            <Tags className="text-indigo-400 shrink-0" size={24} />
             Mots-clés surveillés
           </h1>
-          <p className="text-sm text-zinc-400 mt-1">Gérez vos critères de recherche Vinted pour l'analyse en arrière-plan.</p>
+          <p className="hidden sm:block text-sm text-zinc-400 mt-1">Gérez vos critères de recherche Vinted pour l'analyse en arrière-plan.</p>
         </div>
         {!creating && !editing && (
           <button
             onClick={() => setCreating(true)}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 rounded-xl text-xs font-semibold shadow-md glow-indigo transition-colors flex items-center gap-1.5"
+            className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 sm:px-4 py-2.5 rounded-xl text-xs font-semibold shadow-md glow-indigo transition-colors flex items-center gap-1.5 shrink-0"
           >
             <Plus size={14} />
-            Nouveau mot-clé
+            <span className="hidden sm:inline">Nouveau mot-clé</span>
+            <span className="sm:hidden">Nouveau</span>
           </button>
         )}
       </div>

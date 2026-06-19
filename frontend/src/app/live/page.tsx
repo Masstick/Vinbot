@@ -103,19 +103,19 @@ export default function LivePage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-black tracking-tight text-white flex items-center gap-2">
-            <Radio className="text-red-400" size={26} />
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-2">
+            <Radio className="text-red-400 shrink-0" size={24} />
             Live
           </h1>
-          <p className="text-sm text-zinc-400 mt-1">
+          <p className="text-xs sm:text-sm text-zinc-400 mt-1">
             Nouvelles annonces en temps réel — {totalReceived} reçue{totalReceived !== 1 ? 's' : ''} depuis l'ouverture
           </p>
         </div>
 
         {/* WS status */}
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex items-center gap-2 text-xs shrink-0">
           <span className={`relative flex h-2.5 w-2.5`}>
             {connected && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />}
             <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${connected ? 'bg-emerald-500' : 'bg-red-500'}`} />

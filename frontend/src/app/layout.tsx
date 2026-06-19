@@ -3,6 +3,7 @@ import { Geist } from 'next/font/google';
 import { Sidebar } from '@/components/Sidebar';
 import { CurrentUserProvider } from '@/lib/CurrentUserContext';
 import ProfileGate from '@/components/ProfileGate';
+import PullToRefresh from '@/components/PullToRefresh';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
 import './globals.css';
 
@@ -27,7 +28,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <ServiceWorkerRegister />
           <Sidebar />
           <main className="flex-1 min-w-0 w-full px-4 py-6 md:p-6 lg:p-8 max-w-7xl mx-auto page-transition">
-            <ProfileGate>{children}</ProfileGate>
+            <PullToRefresh>
+              <ProfileGate>{children}</ProfileGate>
+            </PullToRefresh>
           </main>
         </CurrentUserProvider>
       </body>

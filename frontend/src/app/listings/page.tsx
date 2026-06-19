@@ -4,6 +4,7 @@ import { api, KeywordListing, Keyword } from '@/lib/api';
 import { DealCard } from '@/components/DealCard';
 import { Newspaper, Filter, Search, Clock, Globe, RefreshCw, ChevronDown, UserCheck } from 'lucide-react';
 import { useKeywordChanged } from '@/lib/useKeywordChanged';
+import { useRefreshSignal } from '@/lib/refreshEvent';
 import { useCurrentUser } from '@/lib/CurrentUserContext';
 
 const PAGE_SIZE = 48;
@@ -126,6 +127,7 @@ export default function LatestListingsPage() {
   }, [load]);
 
   useKeywordChanged(() => load(false));
+  useRefreshSignal(() => load(true));
 
   const loadMore = () => {
     setLoadingMore(true);
@@ -145,27 +147,27 @@ export default function LatestListingsPage() {
   return (
     <div className="space-y-6">
       {/* Page Title */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-black text-white tracking-tight flex items-center gap-2">
-            <Newspaper className="text-indigo-400" size={26} />
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-2">
+            <Newspaper className="text-indigo-400 shrink-0" size={24} />
             Dernières annonces
           </h1>
-          <p className="text-sm text-zinc-400 mt-1">
+          <p className="hidden sm:block text-sm text-zinc-400 mt-1">
             Toutes les annonces détectées, des plus récentes aux plus anciennes. Actualisation auto toutes les 30s.
           </p>
         </div>
         <button
           onClick={() => load(true)}
-          className="flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors"
+          className="flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors shrink-0"
         >
           <RefreshCw size={13} />
-          Actualiser
+          <span className="hidden sm:inline">Actualiser</span>
         </button>
       </div>
 
       {/* Filters */}
-      <div className="bg-zinc-900/50 border border-zinc-800/80 p-5 rounded-2xl flex flex-wrap gap-4 items-end backdrop-blur-md">
+      <div className="bg-zinc-900/50 border border-zinc-800/80 p-4 sm:p-5 rounded-2xl flex flex-wrap gap-3 sm:gap-4 items-end backdrop-blur-md">
         {/* Search */}
         <div className="flex-1 min-w-[200px]">
           <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">

@@ -6,8 +6,8 @@ import { LayoutDashboard, Tags, Settings, Menu, X, Bot, Newspaper, Radio } from 
 import UserPicker from './UserPicker';
 
 const navLinks = [
-  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/listings', label: 'Dernières annonces', icon: Newspaper },
+  { href: '/dashboard', label: 'Statistiques', icon: LayoutDashboard },
   { href: '/live', label: 'Live', icon: Radio },
   { href: '/keywords', label: 'Mots-clés', icon: Tags },
   { href: '/settings', label: 'Réglages', icon: Settings },
@@ -19,8 +19,15 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Mobile Top Header */}
-      <header className="lg:hidden h-14 bg-zinc-900 border-b border-zinc-800 px-4 flex items-center justify-between sticky top-0 z-30">
+      {/* Mobile Top Header — hamburger à gauche */}
+      <header className="lg:hidden h-14 bg-zinc-900 border-b border-zinc-800 px-3 flex items-center gap-3 sticky top-0 z-30">
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          aria-label="Menu"
+          className="text-zinc-300 hover:text-white p-1.5 -ml-1 rounded-lg focus:outline-none"
+        >
+          {isOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
         <div className="flex items-center gap-2">
           <div className="bg-indigo-600 p-1.5 rounded-lg text-white glow-indigo">
             <Bot size={18} />
@@ -29,12 +36,6 @@ export function Sidebar() {
             Vinbot
           </span>
         </div>
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="text-zinc-400 hover:text-white p-1 rounded-lg focus:outline-none"
-        >
-          {isOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
       </header>
 
       {/* Backdrop for mobile drawer */}
