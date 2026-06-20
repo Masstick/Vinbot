@@ -66,6 +66,36 @@ describe('VintedClient.filterByTitle', () => {
     const filtered = (client as any).filterByTitle(items, '');
     expect(filtered).toHaveLength(2);
   });
+
+  it('folds accents (mémoire ↔ memoire)', () => {
+    const items = [{ title: 'Mémoire DDR4 3200 8 Go' }];
+    const filtered = (client as any).filterByTitle(items, 'memoire ddr4 3200 8gb');
+    expect(filtered).toHaveLength(1);
+  });
+
+  it('normalise les To/TB (2 To = 2tb)', () => {
+    const items = [{ title: 'Disque SSD 2 To Samsung' }];
+    const filtered = (client as any).filterByTitle(items, 'ssd 2tb');
+    expect(filtered).toHaveLength(1);
+  });
+
+  it('tolère UN mot descriptif manquant dès 3 mots (sans chiffre)', () => {
+    const items = [
+      { title: 'Veste en cuir noir Zara' }, // "homme" absent mais 3/4 mots → gardé
+      { title: 'Robe en lin beige' }, // ni cuir ni noir → rejeté
+    ];
+    const filtered = (client as any).filterByTitle(items, 'veste cuir noir homme');
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0].title).toBe('Veste en cuir noir Zara');
+  });
+
+  it('garde les tokens à chiffre OBLIGATOIRES même avec tolérance sur les mots', () => {
+    // 4 tokens dont 1 spec (i7) : la spec reste obligatoire, la tolérance ne joue
+    // que sur les mots. Un titre sans "i7" est rejeté même s'il a tous les mots.
+    const items = [{ title: 'Processeur ordinateur portable gamer Ryzen' }];
+    const filtered = (client as any).filterByTitle(items, 'processeur ordinateur portable i7');
+    expect(filtered).toHaveLength(0);
+  });
 });
 
 describe('VintedClient.getSellerProfile', () => {

@@ -21,6 +21,14 @@ const AVAILABILITY_RECENCY_SECONDS = 14 * 24 * 60 * 60;  // borne aux annonces v
 const AVAILABILITY_BATCH_SIZE = 40;                      // annonces enfilées par tick (sous le plafond 1 req/s)
 const AVAILABILITY_TICK_MS = 45_000;                    // cadence d'enfilement
 
+// Scan principal : exécution parallèle bornée des scans (mot-clé × pays) dus, pour
+// réduire la latence de détection sans saturer Vinted. Le tick passe souvent vérifier
+// les échéances ; c'est `scan_interval_seconds` (par mot-clé) qui cadence le travail réel.
+const SCAN_CONCURRENCY = 3;                              // scans simultanés max
+const FAST_TICK_MIN_MS = 10_000;                        // cadence min de vérification des échéances
+const FAST_TICK_MAX_MS = 15_000;                        // cadence max
+const SCAN_INTERVAL_FLOOR_SECONDS = 15;                 // garde-fou : on ne scanne jamais plus vite que ça
+
 function randInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
@@ -46,7 +54,9 @@ export class ScraperService implements OnModuleInit {
   // périodiques (fast scan) sont court-circuités. La file vendeur déjà
   // remplie se vide d'elle-même (plus rien n'y entre).
   private paused = false;
-  private lastRunAt: Map<number, number> = new Map();
+  // Clé `${keywordId}:${countryCode}` → dernier scan (epoch ms). Sert à honorer
+  // scan_interval_seconds par couple mot-clé/pays.
+  private lastRunAt: Map<string, number> = new Map();
   private lastScrapeTime: Date | null = null;
 
   private readonly sellerQueue: AsyncQueue<SellerCheckItem>;
@@ -138,7 +148,7 @@ export class ScraperService implements OnModuleInit {
 
   private scheduleFastTick(): void {
     this.fastTick().finally(() => {
-      const next = randInt(25_000, 35_000);
+      const next = randInt(FAST_TICK_MIN_MS, FAST_TICK_MAX_MS);
       setTimeout(() => this.scheduleFastTick(), next);
     });
   }
@@ -246,58 +256,93 @@ export class ScraperService implements OnModuleInit {
     const keywords = await this.keywordsService.findActive();
     if (keywords.length === 0) return;
 
+    // Construit la liste des scans dus (mot-clé × pays) en honorant scan_interval_seconds :
+    // un mot-clé n'est re-scanné que si son intervalle est écoulé pour ce pays.
+    const now = Date.now();
+    const jobs: { keyword: Keyword; countryCode: string }[] = [];
     for (const keyword of keywords) {
-      const countryCodes = this.getCountryCodes(keyword);
-      for (const countryCode of countryCodes) {
-        try {
-          const client = this.clientPool.getClient(countryCode);
-          const items = await client.search(
-            keyword.search_text, keyword.min_price, keyword.max_price, 96, 1, keyword.catalog_id,
-          );
-          if (items.length === 0) continue;
-
-          let newCount = 0;
-          for (const item of items) {
-            const { listing, isNew, priceChanged } = await this.listingsService.upsertListing(item, keyword, countryCode);
-
-            // Filtre "vendeur unique" : on vérifie le profil du vendeur en arrière-plan.
-            this.queueSellerCheck(item.seller_id, keyword, countryCode);
-
-            if (isNew) {
-              this.dealsGateway.emitNewListing({
-                listingId: listing.id,
-                title: listing.title ?? item.title,
-                price: parseFloat(String(listing.price ?? item.price)),
-                photoUrl: listing.photo_url ?? null,
-                url: listing.url ?? null,
-                keywordLabel: keyword.label,
-                vintedCreatedAt: listing.vinted_created_at ? listing.vinted_created_at.toISOString() : null,
-                userId: keyword.user_id,
-              });
-              await this.maybeAlertNewListing(listing, keyword, countryCode);
-            }
-            if (isNew || priceChanged) newCount++;
-          }
-
-          this.lastRunAt.set(keyword.id, Date.now());
-          this.lastScrapeTime = new Date();
-          this.logger.log(`[FastScan] "${keyword.search_text}" [${countryCode}] → ${items.length} annonces, ${newCount} nouvelles/modifiées`);
-        } catch (err: any) {
-          if (err.message === 'BANNED') {
-            this.logger.warn(`[FastScan] Keyword #${keyword.id} [${countryCode}] bloqué — pause 60s`);
-            await this.delay(60_000);
-          } else {
-            this.logger.error(`[FastScan] Keyword #${keyword.id} [${countryCode}]: ${err.message}`);
-          }
-        }
-        if (countryCodes.indexOf(countryCode) < countryCodes.length - 1) {
-          await this.delay(randInt(2_000, 4_000));
-        }
-      }
-      if (keywords.indexOf(keyword) < keywords.length - 1) {
-        await this.delay(randInt(3_000, 7_000));
+      const intervalMs =
+        Math.max(keyword.scan_interval_seconds ?? 120, SCAN_INTERVAL_FLOOR_SECONDS) * 1000;
+      for (const countryCode of this.getCountryCodes(keyword)) {
+        const last = this.lastRunAt.get(`${keyword.id}:${countryCode}`);
+        if (last && now - last < intervalMs) continue; // pas encore dû
+        jobs.push({ keyword, countryCode });
       }
     }
+    if (jobs.length === 0) return;
+
+    // Exécution parallèle bornée : divise la latence de détection par le facteur de
+    // concurrence tout en gardant un trafic Vinted raisonnable.
+    await this.runJobsWithConcurrency(jobs, SCAN_CONCURRENCY, job =>
+      this.scanKeywordCountry(job.keyword, job.countryCode),
+    );
+  }
+
+  /** Scanne un couple (mot-clé, pays) : recherche, upsert, alerte. Isolé pour la parallélisation. */
+  private async scanKeywordCountry(keyword: Keyword, countryCode: string): Promise<void> {
+    try {
+      const client = this.clientPool.getClient(countryCode);
+      const items = await client.search(
+        keyword.search_text, keyword.min_price, keyword.max_price, 96, 1, keyword.catalog_id,
+      );
+      // On marque le scan fait dès la réponse OK (même vide) : l'intervalle repart de là.
+      this.lastRunAt.set(`${keyword.id}:${countryCode}`, Date.now());
+      this.lastScrapeTime = new Date();
+      if (items.length === 0) return;
+
+      let newCount = 0;
+      for (const item of items) {
+        const { listing, isNew, priceChanged } = await this.listingsService.upsertListing(item, keyword, countryCode);
+
+        // Filtre "vendeur unique" : on vérifie le profil du vendeur en arrière-plan.
+        this.queueSellerCheck(item.seller_id, keyword, countryCode);
+
+        if (isNew) {
+          this.dealsGateway.emitNewListing({
+            listingId: listing.id,
+            title: listing.title ?? item.title,
+            price: parseFloat(String(listing.price ?? item.price)),
+            photoUrl: listing.photo_url ?? null,
+            url: listing.url ?? null,
+            keywordLabel: keyword.label,
+            vintedCreatedAt: listing.vinted_created_at ? listing.vinted_created_at.toISOString() : null,
+            userId: keyword.user_id,
+          });
+          await this.maybeAlertNewListing(listing, keyword, countryCode);
+        }
+        if (isNew || priceChanged) newCount++;
+      }
+
+      this.logger.log(`[FastScan] "${keyword.search_text}" [${countryCode}] → ${items.length} annonces, ${newCount} nouvelles/modifiées`);
+    } catch (err: any) {
+      if (err.message === 'BANNED') {
+        this.logger.warn(`[FastScan] Keyword #${keyword.id} [${countryCode}] bloqué — pause 60s`);
+        await this.delay(60_000);
+      } else {
+        this.logger.error(`[FastScan] Keyword #${keyword.id} [${countryCode}]: ${err.message}`);
+      }
+    }
+  }
+
+  /**
+   * Exécute `jobs` avec au plus `concurrency` workers en parallèle. Chaque worker
+   * tire le job suivant et applique un léger jitter entre deux scans pour humaniser
+   * le trafic (un même worker ne tape pas Vinted en rafale).
+   */
+  private async runJobsWithConcurrency<J>(
+    jobs: J[],
+    concurrency: number,
+    worker: (job: J) => Promise<void>,
+  ): Promise<void> {
+    let idx = 0;
+    const runners = Array.from({ length: Math.min(concurrency, jobs.length) }, async () => {
+      while (idx < jobs.length) {
+        const job = jobs[idx++];
+        await worker(job);
+        if (idx < jobs.length) await this.delay(randInt(800, 1800));
+      }
+    });
+    await Promise.all(runners);
   }
 
   private async maybeAlertNewListing(listing: Listing, keyword: Keyword, countryCode: string): Promise<void> {
@@ -317,13 +362,20 @@ export class ScraperService implements OnModuleInit {
         seller: this.sellerQueue.getStats(),
         availability: this.availabilityQueue.getStats(),
       },
-      keywords: keywords.map(kw => ({
-        id: kw.id,
-        label: kw.label,
-        countryCodes: this.getCountryCodes(kw),
-        lastRunAt: this.lastRunAt.get(kw.id) ? new Date(this.lastRunAt.get(kw.id)!) : null,
-        nextRunInSeconds: 0,
-      })),
+      keywords: keywords.map(kw => {
+        const codes = this.getCountryCodes(kw);
+        const times = codes
+          .map(c => this.lastRunAt.get(`${kw.id}:${c}`))
+          .filter((t): t is number => typeof t === 'number');
+        const last = times.length ? Math.max(...times) : null;
+        return {
+          id: kw.id,
+          label: kw.label,
+          countryCodes: codes,
+          lastRunAt: last ? new Date(last) : null,
+          nextRunInSeconds: 0,
+        };
+      }),
     };
   }
 

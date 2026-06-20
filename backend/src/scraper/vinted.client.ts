@@ -6,6 +6,25 @@ import { VintedItem } from '../listings/listings.service';
 
 const SESSION_TTL_MS = 90 * 60 * 1000; // 90 minutes
 
+// Rotation de User-Agent : on tire un UA réaliste à la création de chaque session
+// (et à chaque reset après un 403). Vu de Vinted, le trafic ressemble à plusieurs
+// navigateurs distincts plutôt qu'à un seul robot figé. Tous desktop pour rester
+// cohérent avec les en-têtes Accept/Accept-Language envoyés.
+const USER_AGENTS: string[] = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+];
+
+function pickUserAgent(): string {
+  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+}
+
 export const COUNTRY_DOMAINS: Record<string, string> = {
   fr: 'https://www.vinted.fr',
   be: 'https://www.vinted.be',
@@ -33,6 +52,7 @@ export class VintedClient {
   private client: ReturnType<typeof wrapper>;
   private sessionReady = false;
   private lastSessionInit: number = 0;
+  private userAgent: string = pickUserAgent();
   private readonly baseUrl: string;
   private readonly apiUrl: string;
   readonly countryCode: string;
@@ -46,12 +66,15 @@ export class VintedClient {
 
   private createHttpClient(): ReturnType<typeof wrapper> {
     const jar = new CookieJar();
+    // Nouveau UA à chaque (re)création de session : la rotation joue au niveau session,
+    // pas par requête (un même « visiteur » ne change pas de navigateur en cours de route).
+    this.userAgent = pickUserAgent();
     return wrapper(
       axios.create({
         jar,
         withCredentials: true,
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'User-Agent': this.userAgent,
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
           'Accept-Language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7',
         },
@@ -213,32 +236,43 @@ export class VintedClient {
   }
 
   /**
-   * Filtre de pertinence : TOUS les termes de la recherche doivent être présents
-   * dans le titre (logique ET). Une normalisation unifie les variantes d'unités
-   * (8 Go = 8gb = 8 GB, ddr 4 = ddr4, 3200 mhz = 3200mhz) pour ne pas écarter
-   * les annonces FR correctement libellées. Ex. "Ddr4 3200 8gb" ne garde que les
-   * annonces contenant ddr4 ET 3200 ET 8gb — plus de DDR3 4 Go parasites.
+   * Filtre de pertinence. Deux familles de tokens :
+   *  - les SPECS (token contenant un chiffre : 8gb, 3200mhz, ddr4, i7) sont
+   *    OBLIGATOIRES — une spec différente = un autre produit (pas de DDR3 4 Go
+   *    parasite pour une recherche "Ddr4 3200 8gb") ;
+   *  - les MOTS descriptifs (purement alphabétiques) tolèrent UN manquant dès
+   *    qu'il y en a 3+, pour rattraper les titres FR libellés un peu autrement.
+   * Une normalisation unifie en amont les variantes d'écriture (accents, Go/GB,
+   * MHz, To/TB, DDR n) pour ne pas écarter des annonces correctes.
    */
   private filterByTitle(items: any[], searchText: string): any[] {
     const tokens = this.normalizeSpecs(searchText)
       .split(/\s+/)
       .filter(t => t.length >= 2);
     if (tokens.length === 0) return items;
+    const specTokens = tokens.filter(t => /\d/.test(t));
+    const wordTokens = tokens.filter(t => !/\d/.test(t));
+    const maxMissingWords = wordTokens.length >= 3 ? 1 : 0;
     return items.filter(item => {
       const title = this.normalizeSpecs(item.title ?? '');
       if (!title) return false;
-      return tokens.every(token => title.includes(token));
+      if (!specTokens.every(token => title.includes(token))) return false;
+      const missingWords = wordTokens.filter(token => !title.includes(token)).length;
+      return missingWords <= maxMissingWords;
     });
   }
 
   /**
-   * Normalise les specs matériel pour comparer titre et recherche de façon
-   * tolérante aux variantes d'écriture (espaces, Go/GB, MHz, DDR n).
+   * Normalise titre et recherche pour une comparaison tolérante aux variantes
+   * d'écriture : casse, accents (mémoire → memoire), unités (Go/GB, Mo/MB,
+   * To/TB, MHz/GHz) et "ddr n" → "ddrn".
    */
   private normalizeSpecs(s: string): string {
     return s
       .toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '') // retire les accents
       .replace(/(\d+)\s*(go|gb)\b/g, '$1gb') // 8 Go / 8GB / 8 gb → 8gb
+      .replace(/(\d+)\s*(to|tb)\b/g, '$1tb') // 2 To / 2TB → 2tb
       .replace(/(\d+)\s*(mo|mb)\b/g, '$1mb') // 512 Mo → 512mb
       .replace(/(\d+)\s*(mhz|ghz)\b/g, '$1$2') // 3200 mhz → 3200mhz
       .replace(/\bddr\s+(\d)/g, 'ddr$1'); // ddr 4 → ddr4
