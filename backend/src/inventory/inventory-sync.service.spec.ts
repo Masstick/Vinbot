@@ -12,6 +12,7 @@ describe('InventorySyncService.syncNow', () => {
       inventory: {
         upsertListing: jest.fn(async () => ({})),
         upsertSale: jest.fn(async () => ({})),
+        markUnseenAsDeleted: jest.fn(async () => 0),
       },
     };
   }
@@ -40,13 +41,14 @@ describe('InventorySyncService.syncNow', () => {
     (svc as any).makeClient = () => ({
       keepAlive: async () => '{"cookies":[1]}',
       getCatalogMap: async () => new Map(),
-      getMemberItems: async () => [{ vinted_id: 1 }, { vinted_id: 2 }],
-      getSales: async () => [{ vinted_order_id: 9 }],
+      getMemberItems: async (_userId: number, page: number) => (page === 1 ? [{ vinted_id: 1 }, { vinted_id: 2 }] : []),
+      getSales: async (page: number) => (page === 1 ? [{ vinted_order_id: 9 }] : []),
     });
     const res = await svc.syncNow();
     expect(res).toEqual({ items: 2, sales: 1 });
     expect(d.accounts.touchRefreshed).toHaveBeenCalledWith('{"cookies":[1]}');
     expect(d.inventory.upsertListing).toHaveBeenCalledTimes(2);
     expect(d.inventory.upsertSale).toHaveBeenCalledTimes(1);
+    expect(d.inventory.markUnseenAsDeleted).toHaveBeenCalled();
   });
 });

@@ -52,7 +52,7 @@ export class InventoryService {
   }
 
   async upsertSale(accountId: number, rec: SaleRecord): Promise<Sale> {
-    let row = rec.vinted_order_id != null
+    let row = rec.vinted_order_id != null && !Number.isNaN(rec.vinted_order_id)
       ? await this.sales.findOne({ where: { vinted_order_id: rec.vinted_order_id } })
       : null;
     if (!row) row = this.sales.create({ account_id: accountId, vinted_order_id: rec.vinted_order_id });
@@ -60,7 +60,7 @@ export class InventoryService {
     row.sale_price = rec.sale_price;
     row.shipping_status = rec.shipping_status;
     row.sold_at = rec.sold_at;
-    if (rec.vinted_item_id != null) {
+    if (rec.vinted_item_id != null && !Number.isNaN(rec.vinted_item_id)) {
       const listing = await this.listings.findOne({ where: { vinted_id: rec.vinted_item_id } });
       if (listing) row.seller_listing_id = listing.id;
     }
@@ -97,5 +97,18 @@ export class InventoryService {
 
   async setPurchasePrice(productId: number, price: number | null): Promise<void> {
     await this.products.update(productId, { purchase_price: price, updated_at: new Date() });
+  }
+
+  /** Marque DELETED les annonces du compte non revues depuis `since` (hors SOLD/DELETED). */
+  async markUnseenAsDeleted(accountId: number, since: Date): Promise<number> {
+    const res = await this.listings
+      .createQueryBuilder()
+      .update(SellerListing)
+      .set({ status: 'DELETED' })
+      .where('account_id = :accountId', { accountId })
+      .andWhere('status NOT IN (:...kept)', { kept: ['SOLD', 'DELETED'] })
+      .andWhere('(last_synced_at IS NULL OR last_synced_at < :since)', { since })
+      .execute();
+    return res.affected ?? 0;
   }
 }

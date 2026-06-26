@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -7,6 +7,9 @@ import { encryptSession, decryptSession } from './session-crypto';
 
 @Injectable()
 export class AccountsService {
+  private readonly logger = new Logger(AccountsService.name);
+  private warnedDefaultKey = false;
+
   constructor(
     @InjectRepository(VintedAccount)
     private readonly repo: Repository<VintedAccount>,
@@ -14,7 +17,12 @@ export class AccountsService {
   ) {}
 
   private key(): string {
-    return this.config.get<string>('SESSION_ENCRYPTION_KEY', 'vinbot-dev-key');
+    const k = this.config.get<string>('SESSION_ENCRYPTION_KEY', 'vinbot-dev-key');
+    if (k === 'vinbot-dev-key' && !this.warnedDefaultKey) {
+      this.warnedDefaultKey = true;
+      this.logger.warn('⚠️ SESSION_ENCRYPTION_KEY non défini — clé par défaut non sécurisée (à changer en prod)');
+    }
+    return k;
   }
 
   async getAccount(): Promise<VintedAccount | null> {

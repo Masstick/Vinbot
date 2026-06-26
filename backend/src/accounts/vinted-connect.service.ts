@@ -44,7 +44,7 @@ export class VintedConnectService {
     await this.withBrowser(async (browser) => {
       const ctx = browser.contexts()[0] ?? (await browser.newContext());
       const page = ctx.pages()[0] ?? (await ctx.newPage());
-      await page.goto('https://www.vinted.fr/member/signup/select_type?ref_url=%2F', { waitUntil: 'domcontentloaded' }).catch(() => {});
+      await page.goto('https://www.vinted.fr/', { waitUntil: 'domcontentloaded' }).catch(() => {});
     });
     return { novncReady: true };
   }

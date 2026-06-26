@@ -5,6 +5,9 @@ import { Logger } from '@nestjs/common';
 
 const BASE = 'https://www.vinted.fr';
 
+export const MEMBER_ITEMS_PER_PAGE = 96;
+export const SALES_PER_PAGE = 50;
+
 export type SellerStatus = 'ONLINE' | 'RESERVED' | 'SOLD' | 'DELETED';
 
 export interface SellerItem {
@@ -139,7 +142,7 @@ export class VintedSellerClient {
   async getMemberItems(userId: number, page = 1): Promise<SellerItem[]> {
     try {
       const resp = await this.client.get(`${BASE}/api/v2/users/${userId}/items`, {
-        params: { per_page: 96, page },
+        params: { per_page: MEMBER_ITEMS_PER_PAGE, page },
         headers: { Referer: `${BASE}/member/${userId}` },
         timeout: 20000,
       });
@@ -152,10 +155,10 @@ export class VintedSellerClient {
     }
   }
 
-  async getSales(): Promise<SaleRecord[]> {
+  async getSales(page = 1): Promise<SaleRecord[]> {
     try {
       const resp = await this.client.get(`${BASE}/api/v2/my_orders`, {
-        params: { type: 'sold', page: 1, per_page: 50 },
+        params: { type: 'sold', page, per_page: SALES_PER_PAGE },
         headers: { Referer: `${BASE}/member/items/sold` },
         timeout: 20000,
       });
@@ -185,7 +188,12 @@ export class VintedSellerClient {
     }
   }
 
-  /** Keep-alive : touche le site, renvoie le storageState à jour (cookies rotés). */
+  /**
+   * Sonde de vivacité : envoie une requête légère pour maintenir la session active et
+   * récupère les cookies éventuellement rotatés par le serveur (re-export du jar à jour).
+   * Ce n'est PAS un vrai rafraîchissement de token — la session peut toujours expirer
+   * entre deux appels. Un endpoint dédié de renouvellement de token est prévu (Bloc B).
+   */
   async keepAlive(): Promise<string> {
     try {
       await this.client.get(`${BASE}/api/v2/users/current`, { timeout: 15000 });
