@@ -52,24 +52,29 @@ export class VintedConnectService {
   /** Détecte le login et capture la session si présent. */
   async detectAndCapture(): Promise<{ connected: boolean; vintedUserId?: number }> {
     return this.withBrowser(async (browser) => {
-      const ctx = browser.contexts()[0];
-      if (!ctx) return { connected: false };
-      const cookies = await ctx.cookies();
-      if (!isLoggedIn(cookies)) return { connected: false };
+      try {
+        const ctx = browser.contexts()[0];
+        if (!ctx) return { connected: false };
+        const cookies = await ctx.cookies();
+        if (!isLoggedIn(cookies)) return { connected: false };
 
-      // Confirme via l'endpoint user courant, et récupère l'id.
-      const page = ctx.pages()[0] ?? (await ctx.newPage());
-      const resp = await page.request.get('https://www.vinted.fr/api/v2/users/current').catch(() => null);
-      if (!resp || !resp.ok()) return { connected: false };
-      const body = await resp.json().catch(() => ({} as any));
-      const vintedUserId = Number(body?.user?.id ?? body?.id ?? 0) || 0;
-      if (!vintedUserId) return { connected: false };
+        // Confirme via l'endpoint user courant, et récupère l'id.
+        const page = ctx.pages()[0] ?? (await ctx.newPage());
+        const resp = await page.request.get('https://www.vinted.fr/api/v2/users/current').catch(() => null);
+        if (!resp || !resp.ok()) return { connected: false };
+        const body = await resp.json().catch(() => ({} as any));
+        const vintedUserId = Number(body?.user?.id ?? body?.id ?? 0) || 0;
+        if (!vintedUserId) return { connected: false };
 
-      const state = await ctx.storageState();
-      const sessionJson = buildSessionJson(state.cookies, state.origins);
-      await this.accounts.saveSession({ vintedUserId, sessionJson });
-      this.logger.log(`Session Vinted capturée (user ${vintedUserId})`);
-      return { connected: true, vintedUserId };
+        const state = await ctx.storageState();
+        const sessionJson = buildSessionJson(state.cookies, state.origins);
+        await this.accounts.saveSession({ vintedUserId, sessionJson });
+        this.logger.log(`Session Vinted capturée (user ${vintedUserId})`);
+        return { connected: true, vintedUserId };
+      } catch (err) {
+        this.logger.warn(`detectAndCapture échoué: ${err instanceof Error ? err.message : String(err)}`);
+        return { connected: false };
+      }
     });
   }
 }
