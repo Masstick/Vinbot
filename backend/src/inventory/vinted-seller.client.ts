@@ -20,6 +20,8 @@ export interface SellerItem {
   view_count: number;
   favourite_count: number;
   vinted_created_at: Date | null;
+  catalog_id: number | null;
+  category: string | null;
 }
 
 export interface SaleRecord {
@@ -49,7 +51,22 @@ export function mapMemberItem(raw: any): SellerItem {
     view_count: Number(raw.view_count ?? 0) || 0,
     favourite_count: Number(raw.favourite_count ?? 0) || 0,
     vinted_created_at: raw.created_at_ts != null ? new Date(Number(raw.created_at_ts) * 1000) : null,
+    catalog_id: raw.catalog_id != null ? Number(raw.catalog_id) : null,
+    category: null, // libellé résolu plus tard via la map de catalogues (le sync le remplit)
   };
+}
+
+/** Helper pur : aplatit récursivement l'arbre de catalogues Vinted en {id, title}. */
+export function flattenCatalogs(raw: any): Array<{ id: number; title: string }> {
+  const out: Array<{ id: number; title: string }> = [];
+  const walk = (nodes: any[]) => {
+    for (const n of nodes ?? []) {
+      if (n && n.id != null) out.push({ id: Number(n.id), title: n.title ?? '' });
+      if (Array.isArray(n?.catalogs)) walk(n.catalogs);
+    }
+  };
+  walk(raw?.catalogs ?? raw ?? []);
+  return out;
 }
 
 /** Helper pur : commande Vinted brute → SaleRecord. */
@@ -148,6 +165,23 @@ export class VintedSellerClient {
       this.throwIfUnauthorized(err.response?.status);
       this.logger.warn(`getSales échec: ${err.message}`);
       return [];
+    }
+  }
+
+  /** Récupère l'arbre de catégories Vinted, aplati en map catalog_id → libellé. */
+  async getCatalogMap(): Promise<Map<number, string>> {
+    try {
+      const resp = await this.client.get(`${BASE}/api/v2/catalogs`, {
+        headers: { Referer: `${BASE}/` },
+        timeout: 20000,
+      });
+      const map = new Map<number, string>();
+      for (const c of flattenCatalogs(resp.data)) map.set(c.id, c.title);
+      return map;
+    } catch (err: any) {
+      this.throwIfUnauthorized(err.response?.status);
+      this.logger.warn(`getCatalogMap échec: ${err.message}`);
+      return new Map();
     }
   }
 

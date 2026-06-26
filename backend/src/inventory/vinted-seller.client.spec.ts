@@ -3,7 +3,7 @@ jest.mock('axios-cookiejar-support', () => ({ wrapper: (c: any) => c }));
 jest.mock('tough-cookie', () => ({ CookieJar: class {}, Cookie: class {} }));
 jest.mock('axios', () => ({ create: () => ({}) }));
 
-import { mapMemberItem, mapSale } from './vinted-seller.client';
+import { mapMemberItem, mapSale, flattenCatalogs } from './vinted-seller.client';
 
 describe('mapMemberItem', () => {
   it('mappe un article actif avec stats', () => {
@@ -34,6 +34,21 @@ describe('mapMemberItem', () => {
 
   it('is_closed prend la précédence sur is_reserved', () => {
     expect(mapMemberItem({ id: 1, price: { amount: '5' }, is_closed: true, is_reserved: true }).status).toBe('SOLD');
+  });
+
+  it('mappe le catalog_id', () => {
+    expect(mapMemberItem({ id: 1, price: { amount: '5' }, catalog_id: 1234 }).catalog_id).toBe(1234);
+    expect(mapMemberItem({ id: 1, price: { amount: '5' } }).catalog_id).toBeNull();
+  });
+});
+
+describe('flattenCatalogs', () => {
+  it('aplatit l\'arbre de catalogues récursivement', () => {
+    const raw = { catalogs: [{ id: 1, title: 'Femmes', catalogs: [{ id: 10, title: 'Robes' }] }] };
+    expect(flattenCatalogs(raw)).toEqual([{ id: 1, title: 'Femmes' }, { id: 10, title: 'Robes' }]);
+  });
+  it('retourne [] sur entrée vide', () => {
+    expect(flattenCatalogs(undefined)).toEqual([]);
   });
 });
 

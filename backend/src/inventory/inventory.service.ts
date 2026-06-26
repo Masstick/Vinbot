@@ -35,6 +35,7 @@ export class InventoryService {
         this.products.create({
           account_id: accountId, title: item.title, brand: item.brand,
           size_label: item.size_label, condition_label: item.condition_label,
+          category: item.category,
         }),
       );
       row = this.listings.create({ account_id: accountId, vinted_id: item.vinted_id, product_id: product.id });
@@ -83,15 +84,14 @@ export class InventoryService {
     if (filters.priceMax != null) qb.andWhere('l.price <= :pmax', { pmax: filters.priceMax });
 
     const rows = await qb.getRawMany();
-    return rows.map((r) => ({
-      ...r,
-      price: r.price != null ? Number(r.price) : null,
-      purchase_price: r.purchase_price != null ? Number(r.purchase_price) : null,
-      margin: computeMargin(r.price != null ? Number(r.price) : null, r.purchase_price != null ? Number(r.purchase_price) : null),
-    })) as InventoryRow[];
+    return rows.map((r) => {
+      const price = r.price != null ? Number(r.price) : null;
+      const purchase_price = r.purchase_price != null ? Number(r.purchase_price) : null;
+      return { ...r, price, purchase_price, margin: computeMargin(price, purchase_price) };
+    }) as InventoryRow[];
   }
 
-  listSales(): Promise<Sale[]> {
+  async listSales(): Promise<Sale[]> {
     return this.sales.find({ order: { sold_at: 'DESC' } });
   }
 
