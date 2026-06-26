@@ -31,6 +31,10 @@ describe('mapMemberItem', () => {
   it('mappe un article vendu', () => {
     expect(mapMemberItem({ id: 1, price: { amount: '5' }, is_closed: true }).status).toBe('SOLD');
   });
+
+  it('is_closed prend la précédence sur is_reserved', () => {
+    expect(mapMemberItem({ id: 1, price: { amount: '5' }, is_closed: true, is_reserved: true }).status).toBe('SOLD');
+  });
 });
 
 describe('mapSale', () => {

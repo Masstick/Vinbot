@@ -158,6 +158,8 @@ export class VintedSellerClient {
       return this.exportSessionJson();
     } catch (err: any) {
       this.throwIfUnauthorized(err.response?.status);
+      // Sur erreur non-401/403 (timeout, 5xx, réseau), on renvoie l'erreur originale
+      // (la rotation de session a échoué), contrairement à getMemberItems/getSales qui retournent [].
       throw err;
     }
   }
