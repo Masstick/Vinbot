@@ -31,6 +31,8 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
       NODE_ENV: production
+      CDP_URL: http://connect-browser:9222
+      SESSION_ENCRYPTION_KEY: ${SESSION_ENCRYPTION_KEY:-vinbot-dev-key}
     depends_on:
       db:
         condition: service_healthy
@@ -41,9 +43,22 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: http://192.168.0.40:3003
+        NEXT_PUBLIC_NOVNC_URL: http://192.168.0.40:6080/vnc.html?autoconnect=1&resize=scale
     restart: unless-stopped
     ports:
       - "3002:3000"
+
+  connect-browser:
+    build:
+      context: ./connect-browser
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      VNC_PASSWORD: ${VNC_PASSWORD:-}
+    shm_size: "1gb"
+    ports:
+      - "6080:6080"   # noVNC (UI accessible depuis ton navigateur)
+    # 9222 (CDP) volontairement NON publié : accessible seulement via le réseau Docker.
 
 volumes:
   postgres_data:
