@@ -52,10 +52,11 @@ export class InventoryService {
   }
 
   async upsertSale(accountId: number, rec: SaleRecord): Promise<Sale> {
-    let row = rec.vinted_order_id != null && !Number.isNaN(rec.vinted_order_id)
-      ? await this.sales.findOne({ where: { vinted_order_id: rec.vinted_order_id } })
+    const orderId = rec.vinted_order_id != null && !Number.isNaN(rec.vinted_order_id) ? rec.vinted_order_id : null;
+    let row = orderId != null
+      ? await this.sales.findOne({ where: { vinted_order_id: orderId } })
       : null;
-    if (!row) row = this.sales.create({ account_id: accountId, vinted_order_id: rec.vinted_order_id });
+    if (!row) row = this.sales.create({ account_id: accountId, vinted_order_id: orderId });
     row.buyer_name = rec.buyer_name;
     row.sale_price = rec.sale_price;
     row.shipping_status = rec.shipping_status;

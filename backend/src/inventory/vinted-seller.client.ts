@@ -139,6 +139,7 @@ export class VintedSellerClient {
     }
   }
 
+  /** Récupère les articles d'un vendeur (pagés). Lance une erreur en cas d'échec non-authentification. */
   async getMemberItems(userId: number, page = 1): Promise<SellerItem[]> {
     try {
       const resp = await this.client.get(`${BASE}/api/v2/users/${userId}/items`, {
@@ -150,11 +151,11 @@ export class VintedSellerClient {
       return items.map(mapMemberItem);
     } catch (err: any) {
       this.throwIfUnauthorized(err.response?.status);
-      this.logger.warn(`getMemberItems échec: ${err.message}`);
-      return [];
+      throw err;
     }
   }
 
+  /** Récupère les ventes du compte (pagées). Lance une erreur en cas d'échec non-authentification. */
   async getSales(page = 1): Promise<SaleRecord[]> {
     try {
       const resp = await this.client.get(`${BASE}/api/v2/my_orders`, {
@@ -166,8 +167,7 @@ export class VintedSellerClient {
       return orders.map(mapSale);
     } catch (err: any) {
       this.throwIfUnauthorized(err.response?.status);
-      this.logger.warn(`getSales échec: ${err.message}`);
-      return [];
+      throw err;
     }
   }
 
