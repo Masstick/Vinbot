@@ -6,11 +6,12 @@ import { Sale } from './sale.entity';
 import { AccountsModule } from '../accounts/accounts.module';
 import { InventoryService } from './inventory.service';
 import { InventorySyncService } from './inventory-sync.service';
+import { InventoryController } from './inventory.controller';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Product, SellerListing, Sale]), AccountsModule],
   providers: [InventoryService, InventorySyncService],
-  controllers: [],
+  controllers: [InventoryController],
   exports: [InventoryService, InventorySyncService],
 })
 export class InventoryModule {}
