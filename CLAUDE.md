@@ -9,9 +9,10 @@ A Vinted deal-hunting bot: it scrapes Vinted.fr for second-hand listings matchin
 ## Project Structure
 
 ```
-backend/   NestJS API — scraper, business logic, WebSocket gateway
-frontend/  Next.js 16 dashboard — deal feed, keywords management
-db/        init.sql — PostgreSQL schema (source of truth, no migrations)
+backend/           NestJS API — scraper, business logic, WebSocket gateway
+frontend/          Next.js 16 dashboard — deal feed, keywords management
+db/                init.sql — PostgreSQL schema (source of truth, no migrations)
+connect-browser/   Sidecar Docker (Chromium + Xvfb + x11vnc + noVNC) — navigateur streamé pour la connexion au compte Vinted
 docker-compose.yml
 ```
 
@@ -64,6 +65,8 @@ npm run lint
 | `listings` | Vinted listing storage + market average computation + upsert logic |
 | `scraper` | Scheduled 15 s tick → processes keywords whose `scan_interval_seconds` has elapsed |
 | `notifications` | Telegram alerts + Socket.io `DealsGateway` for real-time push |
+| `accounts` | Compte Vinted connecté : session chiffrée, statut, refresh, flux de connexion noVNC (via le sidecar connect-browser) |
+| `inventory` | Stock vendeur : synchro HTTP authentifiée (articles + ventes), produits/annonces/ventes, calcul de marge |
 
 ### Scrape cycle (ScraperService)
 1. Every 15 s, `tick()` calls `processNextDueKeyword()`
@@ -97,3 +100,6 @@ See `.env.example`. Key vars:
 | `TELEGRAM_BOT_TOKEN` | — | Required for Telegram alerts |
 | `TELEGRAM_CHAT_ID` | — | Target chat/channel |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:3001` | Frontend build-time API base |
+| `SESSION_ENCRYPTION_KEY` | — | Encryption key for Vinted session storage (change in prod) |
+| `CDP_URL` | — | Chrome DevTools Protocol URL (connect-browser sidecar) |
+| `NEXT_PUBLIC_NOVNC_URL` | — | noVNC WebSocket URL for browser streaming (frontend build-time) |
