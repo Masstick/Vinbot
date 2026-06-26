@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Tags, Settings, Menu, X, Bot, Newspaper, Plug, Package } from 'lucide-react';
+import { LayoutDashboard, Tags, Settings, Menu, X, Bot, Newspaper, Plug, Package, Receipt } from 'lucide-react';
 import UserPicker from './UserPicker';
 import { ScraperStatus } from './ScraperStatus';
 
@@ -13,6 +13,7 @@ const navLinks = [
   { href: '/settings', label: 'Réglages', icon: Settings },
   { href: '/compte', label: 'Compte', icon: Plug },
   { href: '/inventaire', label: 'Inventaire', icon: Package },
+  { href: '/ventes', label: 'Ventes', icon: Receipt },
 ];
 
 export function Sidebar() {
