@@ -1,5 +1,11 @@
 // backend/src/accounts/vinted-connect.spec.ts
-import { isLoggedIn, buildSessionJson, resolveCdpEndpoint } from './vinted-connect.service';
+import { isLoggedIn, buildSessionJson, resolveCdpEndpoint, parseUserIdFromCookies } from './vinted-connect.service';
+
+function makeJwt(payload: object): string {
+  const b64url = (o: object) =>
+    Buffer.from(JSON.stringify(o)).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  return `${b64url({ alg: 'HS256' })}.${b64url(payload)}.sig`;
+}
 
 describe('vinted-connect helpers', () => {
   it('isLoggedIn vrai si cookie access_token_web présent', () => {
@@ -29,5 +35,18 @@ describe('resolveCdpEndpoint', () => {
       throw new Error('lookup ne doit pas être appelé pour une IP');
     });
     expect(out).toBe('http://10.0.0.5:9222');
+  });
+});
+
+describe('parseUserIdFromCookies', () => {
+  it('extrait le claim sub du JWT access_token_web', () => {
+    const jwt = makeJwt({ sub: '42266523', scope: 'public' });
+    expect(parseUserIdFromCookies([{ name: 'access_token_web', value: jwt }])).toBe(42266523);
+  });
+  it('null si access_token_web absent', () => {
+    expect(parseUserIdFromCookies([{ name: '_vinted_fr_session', value: 'x' }])).toBeNull();
+  });
+  it('null si le JWT est malformé', () => {
+    expect(parseUserIdFromCookies([{ name: 'access_token_web', value: 'pas-un-jwt' }])).toBeNull();
   });
 });

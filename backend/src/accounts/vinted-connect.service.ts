@@ -37,6 +37,28 @@ export function buildSessionJson(cookies: any[], origins: any[]): string {
   return JSON.stringify({ cookies, origins });
 }
 
+/**
+ * Helper pur : extrait l'id utilisateur Vinted du cookie `access_token_web` (un JWT
+ * dont le payload contient le claim `sub` = id du compte). On évite ainsi tout appel
+ * réseau (l'API /users/current se fait 403 par l'anti-bot sur les requêtes
+ * programmatiques). Retourne null si le cookie est absent ou le JWT illisible.
+ */
+export function parseUserIdFromCookies(cookies: { name: string; value: string }[]): number | null {
+  const at = cookies.find((c) => c.name === 'access_token_web');
+  if (!at) return null;
+  const parts = at.value.split('.');
+  if (parts.length !== 3) return null;
+  try {
+    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+    const payload = JSON.parse(Buffer.from(padded, 'base64').toString('utf8'));
+    const id = Number(payload.sub);
+    return Number.isFinite(id) && id > 0 ? id : null;
+  } catch {
+    return null;
+  }
+}
+
 @Injectable()
 export class VintedConnectService {
   private readonly logger = new Logger(VintedConnectService.name);
@@ -80,12 +102,9 @@ export class VintedConnectService {
         const cookies = await ctx.cookies();
         if (!isLoggedIn(cookies)) return { connected: false };
 
-        // Confirme via l'endpoint user courant, et récupère l'id.
-        const page = ctx.pages()[0] ?? (await ctx.newPage());
-        const resp = await page.request.get('https://www.vinted.fr/api/v2/users/current').catch(() => null);
-        if (!resp || !resp.ok()) return { connected: false };
-        const body = await resp.json().catch(() => ({} as any));
-        const vintedUserId = Number(body?.user?.id ?? body?.id ?? 0) || 0;
+        // Id du compte extrait du JWT access_token_web (pas d'appel réseau : l'anti-bot
+        // Vinted renvoie 403 sur les requêtes API programmatiques).
+        const vintedUserId = parseUserIdFromCookies(cookies);
         if (!vintedUserId) return { connected: false };
 
         const state = await ctx.storageState();
