@@ -142,7 +142,7 @@ export class VintedSellerClient {
   /** Récupère les articles d'un vendeur (pagés). Lance une erreur en cas d'échec non-authentification. */
   async getMemberItems(userId: number, page = 1): Promise<SellerItem[]> {
     try {
-      const resp = await this.client.get(`${BASE}/api/v2/users/${userId}/items`, {
+      const resp = await this.client.get(`${BASE}/api/v2/wardrobe/${userId}/items`, {
         params: { per_page: MEMBER_ITEMS_PER_PAGE, page },
         headers: { Referer: `${BASE}/member/${userId}` },
         timeout: 20000,
