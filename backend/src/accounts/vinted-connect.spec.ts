@@ -1,5 +1,5 @@
 // backend/src/accounts/vinted-connect.spec.ts
-import { isLoggedIn, buildSessionJson } from './vinted-connect.service';
+import { isLoggedIn, buildSessionJson, resolveCdpEndpoint } from './vinted-connect.service';
 
 describe('vinted-connect helpers', () => {
   it('isLoggedIn vrai si cookie access_token_web présent', () => {
@@ -16,5 +16,18 @@ describe('vinted-connect helpers', () => {
     const parsed = JSON.parse(json);
     expect(parsed.cookies).toHaveLength(1);
     expect(parsed.origins[0].origin).toBe('https://www.vinted.fr');
+  });
+});
+
+describe('resolveCdpEndpoint', () => {
+  it('résout le hostname en IP (Host accepté par DevTools)', async () => {
+    const out = await resolveCdpEndpoint('http://connect-browser:9222', async () => ({ address: '172.19.0.3' }));
+    expect(out).toBe('http://172.19.0.3:9222');
+  });
+  it('laisse une IP inchangée sans résolution', async () => {
+    const out = await resolveCdpEndpoint('http://10.0.0.5:9222', async () => {
+      throw new Error('lookup ne doit pas être appelé pour une IP');
+    });
+    expect(out).toBe('http://10.0.0.5:9222');
   });
 });

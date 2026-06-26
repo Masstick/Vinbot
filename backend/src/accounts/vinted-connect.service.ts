@@ -2,6 +2,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { chromium, Browser } from 'playwright-core';
+import { lookup } from 'dns/promises';
+import { isIP } from 'net';
 import { AccountsService } from './accounts.service';
 
 const AUTH_COOKIES = ['access_token_web', '_vinted_fr_session'];
@@ -9,6 +11,25 @@ const AUTH_COOKIES = ['access_token_web', '_vinted_fr_session'];
 /** Helper pur : l'utilisateur est-il loggé d'après ses cookies ? */
 export function isLoggedIn(cookies: { name: string }[]): boolean {
   return cookies.some((c) => AUTH_COOKIES.includes(c.name));
+}
+
+/**
+ * Résout l'hôte de l'URL CDP en IP. Chromium (≥ v111) refuse les requêtes DevTools
+ * dont le Host n'est ni localhost ni une IP (HTTP 500), et renvoie l'URL websocket
+ * avec ce même Host. En s'y connectant par IP, le Host est une IP (accepté) et l'URL
+ * ws renvoyée est joignable (le sidecar expose le CDP loopback sur son IP via socat).
+ * Une IP est laissée telle quelle (pas de résolution).
+ */
+export async function resolveCdpEndpoint(
+  cdpUrl: string,
+  lookupFn: (host: string) => Promise<{ address: string }> = (h) => lookup(h),
+): Promise<string> {
+  const u = new URL(cdpUrl);
+  if (!isIP(u.hostname)) {
+    const { address } = await lookupFn(u.hostname);
+    u.hostname = address;
+  }
+  return u.toString().replace(/\/$/, '');
 }
 
 /** Helper pur : sérialise un storageState minimal { cookies, origins }. */
@@ -30,7 +51,8 @@ export class VintedConnectService {
   }
 
   private async withBrowser<T>(fn: (b: Browser) => Promise<T>): Promise<T> {
-    const browser = await chromium.connectOverCDP(this.cdpUrl());
+    const endpoint = await resolveCdpEndpoint(this.cdpUrl());
+    const browser = await chromium.connectOverCDP(endpoint);
     try {
       return await fn(browser);
     } finally {
