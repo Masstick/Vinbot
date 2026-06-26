@@ -53,6 +53,8 @@ services:
       context: ./connect-browser
       dockerfile: Dockerfile
     restart: unless-stopped
+    environment:
+      VNC_PASSWORD: ${VNC_PASSWORD:-}
     shm_size: "1gb"
     ports:
       - "6080:6080"   # noVNC (UI accessible depuis ton navigateur)
