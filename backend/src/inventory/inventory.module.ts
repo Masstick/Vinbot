@@ -5,11 +5,12 @@ import { SellerListing } from './seller-listing.entity';
 import { Sale } from './sale.entity';
 import { AccountsModule } from '../accounts/accounts.module';
 import { InventoryService } from './inventory.service';
+import { InventorySyncService } from './inventory-sync.service';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Product, SellerListing, Sale]), AccountsModule],
-  providers: [InventoryService],
+  providers: [InventoryService, InventorySyncService],
   controllers: [],
-  exports: [InventoryService],
+  exports: [InventoryService, InventorySyncService],
 })
 export class InventoryModule {}
