@@ -6,6 +6,7 @@ async function req<T>(path: string, options?: RequestInit): Promise<T> {
     ...options,
   });
   if (!res.ok) throw new Error(`API error ${res.status}`);
+  if (res.status === 204) return undefined as T;
   return res.json();
 }
 
@@ -31,6 +32,48 @@ export interface User {
   name: string;
   telegram_chat_id: string;
   created_at: string;
+}
+
+export interface AccountStatusResp {
+  connected: boolean;
+  status: 'connected' | 'expired' | 'disconnected' | 'none';
+  label?: string;
+  vinted_user_id?: number;
+  connected_at?: string;
+}
+
+export interface InventoryRow {
+  id: number;
+  product_id: number | null;
+  vinted_id: number;
+  url: string | null;
+  price: number | null;
+  status: 'ONLINE' | 'RESERVED' | 'SOLD' | 'DELETED';
+  view_count: number | null;
+  favourite_count: number | null;
+  photo_url: string | null;
+  vinted_created_at: string | null;
+  last_synced_at: string | null;
+  brand: string | null;
+  size_label: string | null;
+  category: string | null;
+  purchase_price: number | null;
+  margin: number | null;
+}
+
+export interface SaleRow {
+  id: number;
+  account_id: number;
+  seller_listing_id: number | null;
+  vinted_order_id: number | null;
+  buyer_name: string | null;
+  sale_price: number | null;
+  shipping_status: string | null;
+  sold_at: string | null;
+}
+
+export interface InventoryFilterParams {
+  brand?: string; size?: string; category?: string; priceMin?: number; priceMax?: number;
 }
 
 export interface Listing {
@@ -133,6 +176,17 @@ function latestQuery(p: LatestListingsParams): string {
   return s ? `?${s}` : '';
 }
 
+function inventoryQuery(p: InventoryFilterParams): string {
+  const qs = new URLSearchParams();
+  if (p.brand) qs.set('brand', p.brand);
+  if (p.size) qs.set('size', p.size);
+  if (p.category) qs.set('category', p.category);
+  if (p.priceMin != null) qs.set('price_min', String(p.priceMin));
+  if (p.priceMax != null) qs.set('price_max', String(p.priceMax));
+  const s = qs.toString();
+  return s ? `?${s}` : '';
+}
+
 export const api = {
   keywords: {
     list: (userId?: number) => req<Keyword[]>(`/keywords${userId ? `?user_id=${userId}` : ''}`),
@@ -162,5 +216,17 @@ export const api = {
     create: (data: Partial<User>) => req<User>('/users', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: Partial<User>) => req<User>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: number) => req<void>(`/users/${id}`, { method: 'DELETE' }),
+  },
+  accounts: {
+    status: () => req<AccountStatusResp>('/accounts/status'),
+    connectStart: () => req<{ novncReady: boolean }>('/accounts/connect/start', { method: 'POST' }),
+    connectPoll: () => req<{ connected: boolean; vintedUserId?: number }>('/accounts/connect/poll', { method: 'POST' }),
+  },
+  inventory: {
+    list: (filters: InventoryFilterParams = {}) => req<InventoryRow[]>(`/inventory${inventoryQuery(filters)}`),
+    sales: () => req<SaleRow[]>('/inventory/sales'),
+    setPurchasePrice: (productId: number, price: number | null) =>
+      req<void>(`/inventory/products/${productId}/purchase-price`, { method: 'PATCH', body: JSON.stringify({ purchase_price: price }) }),
+    sync: () => req<{ items?: number; sales?: number; skipped?: string }>('/inventory/sync', { method: 'POST' }),
   },
 };
