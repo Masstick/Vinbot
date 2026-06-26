@@ -54,6 +54,7 @@ export interface InventoryRow {
   photo_url: string | null;
   vinted_created_at: string | null;
   last_synced_at: string | null;
+  title: string | null;
   brand: string | null;
   size_label: string | null;
   category: string | null;

@@ -78,8 +78,55 @@ export default function InventairePage() {
           <tbody>
             {rows.map((r) => (
               <tr key={r.id} className="border-t border-zinc-800/60 text-zinc-200">
-                <td className="p-3 max-w-[260px] truncate">
-                  {r.url ? <a href={r.url} target="_blank" rel="noreferrer" className="hover:text-indigo-400">{r.vinted_id}</a> : r.vinted_id}
+                <td className="p-3 max-w-[320px]">
+                  <div className="flex items-center gap-3">
+                    {/* Miniature avec agrandissement au survol */}
+                    <div className="relative group/photo shrink-0">
+                      {r.photo_url ? (
+                        <>
+                          <img
+                            src={r.photo_url}
+                            alt={r.title ?? String(r.vinted_id)}
+                            className="w-10 h-10 rounded-lg object-cover border border-zinc-800 cursor-zoom-in transition-transform group-hover/photo:scale-105"
+                          />
+                          {/* Zoom au survol */}
+                          <div className="absolute left-12 top-1/2 -translate-y-1/2 z-50 hidden group-hover/photo:block pointer-events-none">
+                            <div className="overflow-hidden rounded-xl border border-zinc-700 bg-zinc-950 p-1 shadow-2xl">
+                              <img
+                                src={r.photo_url}
+                                alt="Agrandissement"
+                                className="w-48 h-48 max-w-none rounded-lg object-cover"
+                              />
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="w-10 h-10 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-[9px] text-zinc-500">
+                          Pas d'image
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Titre et lien */}
+                    <div className="flex flex-col min-w-0">
+                      {r.url ? (
+                        <a
+                          href={r.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-zinc-200 hover:text-indigo-400 font-medium text-sm truncate transition-colors"
+                          title={r.title ?? String(r.vinted_id)}
+                        >
+                          {r.title ?? 'Sans titre'}
+                        </a>
+                      ) : (
+                        <span className="text-zinc-400 font-medium text-sm truncate" title={r.title ?? String(r.vinted_id)}>
+                          {r.title ?? 'Sans titre'}
+                        </span>
+                      )}
+                      <span className="text-[10px] text-zinc-500 font-mono">#{r.vinted_id}</span>
+                    </div>
+                  </div>
                 </td>
                 <td className="p-3">{r.brand ?? '—'}</td>
                 <td className="p-3">{r.size_label ?? '—'}</td>

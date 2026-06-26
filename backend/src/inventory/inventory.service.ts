@@ -10,7 +10,7 @@ export interface InventoryFilters {
   brand?: string; size?: string; category?: string; priceMin?: number; priceMax?: number;
 }
 export type InventoryRow = SellerListing & {
-  brand: string | null; size_label: string | null; category: string | null;
+  title: string | null; brand: string | null; size_label: string | null; category: string | null;
   purchase_price: number | null; margin: number | null;
 };
 
@@ -72,6 +72,7 @@ export class InventoryService {
     const qb = this.listings.createQueryBuilder('l')
       .leftJoin(Product, 'p', 'p.id = l.product_id')
       .select('l.*')
+      .addSelect('p.title', 'title')
       .addSelect('p.brand', 'brand')
       .addSelect('p.size_label', 'size_label')
       .addSelect('p.category', 'category')
