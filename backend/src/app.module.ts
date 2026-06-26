@@ -6,12 +6,14 @@ import { ListingsModule } from './listings/listings.module';
 import { ScraperModule } from './scraper/scraper.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { UsersModule } from './users/users.module';
+import { AccountsModule } from './accounts/accounts.module';
 import { Keyword } from './keywords/keyword.entity';
 import { Listing } from './listings/listing.entity';
 import { KeywordListing } from './listings/keyword-listing.entity';
 import { PriceHistory } from './listings/price-history.entity';
 import { NotificationLog } from './notifications/notification-log.entity';
 import { User } from './users/user.entity';
+import { VintedAccount } from './accounts/vinted-account.entity';
 
 @Module({
   imports: [
@@ -26,7 +28,7 @@ import { User } from './users/user.entity';
         database: cfg.get('DB_NAME', 'vinbot'),
         username: cfg.get('DB_USER', 'postgres'),
         password: cfg.get('DB_PASSWORD', 'changeme'),
-        entities: [Keyword, Listing, KeywordListing, PriceHistory, NotificationLog, User],
+        entities: [Keyword, Listing, KeywordListing, PriceHistory, NotificationLog, User, VintedAccount],
         synchronize: false,
         logging: false,
       }),
@@ -36,6 +38,7 @@ import { User } from './users/user.entity';
     ScraperModule,
     NotificationsModule,
     UsersModule,
+    AccountsModule,
   ],
 })
 export class AppModule {}
