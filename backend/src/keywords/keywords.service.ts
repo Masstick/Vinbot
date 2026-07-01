@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Keyword } from './keyword.entity';
@@ -32,15 +36,30 @@ export class KeywordsService {
     return kw;
   }
 
-  create(dto: CreateKeywordDto): Promise<Keyword> {
-    const kw = this.repo.create(dto);
+  async create(dto: CreateKeywordDto): Promise<Keyword> {
+    this.validateSearchCriteria(dto);
+    const kw = this.repo.create({ ...dto, search_text: dto.search_text ?? '' });
     return this.repo.save(kw);
   }
 
   async update(id: number, dto: Partial<CreateKeywordDto>): Promise<Keyword> {
     await this.findOne(id);
-    await this.repo.update(id, { ...dto, updated_at: new Date() });
+    this.validateSearchCriteria(dto);
+    await this.repo.update(id, {
+      ...dto,
+      search_text: dto.search_text ?? '',
+      updated_at: new Date(),
+    });
     return this.findOne(id);
+  }
+
+  /** Il faut au moins un texte de recherche ou une catégorie Vinted pour scanner. */
+  private validateSearchCriteria(dto: Partial<CreateKeywordDto>): void {
+    if (!dto.search_text?.trim() && !dto.catalog_id) {
+      throw new BadRequestException(
+        'Renseignez un texte de recherche ou un ID de catégorie Vinted.',
+      );
+    }
   }
 
   async remove(id: number): Promise<void> {

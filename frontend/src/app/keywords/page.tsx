@@ -146,9 +146,15 @@ export default function KeywordsPage() {
 
                 <div className="text-xs text-zinc-500 flex items-center gap-2">
                   <span className="text-zinc-600 font-mono">Recherche :</span>
-                  <code className="bg-zinc-950 px-2 py-1 rounded text-zinc-300 font-mono border border-zinc-900">
-                    {kw.search_text}
-                  </code>
+                  {kw.search_text ? (
+                    <code className="bg-zinc-950 px-2 py-1 rounded text-zinc-300 font-mono border border-zinc-900">
+                      {kw.search_text}
+                    </code>
+                  ) : (
+                    <code className="bg-zinc-950 px-2 py-1 rounded text-indigo-300 font-mono border border-zinc-900">
+                      Toute la catégorie{kw.catalog_id ? ` #${kw.catalog_id}` : ''}
+                    </code>
+                  )}
                 </div>
 
                 {/* Parameters Grid */}

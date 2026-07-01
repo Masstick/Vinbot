@@ -1,4 +1,11 @@
-import { IsString, IsOptional, IsNumber, IsBoolean, Min, Max } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsNumber,
+  IsBoolean,
+  Min,
+  Max,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateKeywordDto {
@@ -10,8 +17,9 @@ export class CreateKeywordDto {
   @IsString()
   label: string;
 
+  @IsOptional()
   @IsString()
-  search_text: string;
+  search_text?: string;
 
   @IsOptional()
   @Type(() => Number)

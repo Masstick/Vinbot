@@ -49,6 +49,11 @@ export function KeywordForm({ initial, onSaved, onCancel }: Props) {
       setLoading(false);
       return;
     }
+    if (!form.search_text.trim() && form.catalog_id === '') {
+      setError('Renseignez un texte de recherche ou un ID de catégorie Vinted.');
+      setLoading(false);
+      return;
+    }
     try {
       const payload = {
         ...form,
@@ -95,14 +100,16 @@ export function KeywordForm({ initial, onSaved, onCancel }: Props) {
         {/* Texte de recherche Vinted */}
         <div>
           <label className={labelClass}>
-            Texte de recherche Vinted <span className="text-rose-500">*</span>
+            Texte de recherche Vinted
+            <span title="Optionnel si vous renseignez un ID de catégorie ci-dessous : la recherche portera alors sur toute la catégorie.">
+              <HelpCircle size={12} className="text-zinc-500" />
+            </span>
           </label>
           <input
             className={fieldClass}
             value={form.search_text}
             onChange={e => set('search_text', e.target.value)}
-            required
-            placeholder="ex: iphone 13 128go débloqué"
+            placeholder="Optionnel si une catégorie est renseignée"
           />
         </div>
       </div>
