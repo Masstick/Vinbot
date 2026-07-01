@@ -283,7 +283,11 @@ export class VintedClient {
       vinted_id: item.id,
       title: item.title ?? '',
       price: parseFloat(item.price?.amount ?? '0'),
-      url: item.url ?? `${this.baseUrl}/items/${item.id}`,
+      // Vinted renvoie parfois une URL sur le domaine où l'annonce a été postée
+      // (.de, .nl, .pl...) alors que le même item_id est consultable sur .fr —
+      // on force donc toujours le domaine fr pour que les liens restent utilisables
+      // avec le compte connecté de l'utilisateur (comptes non partagés entre pays).
+      url: `${COUNTRY_DOMAINS['fr']}/items/${item.id}`,
       photo_url: item.photo?.url ?? item.photos?.[0]?.url ?? '',
       brand: item.brand_title ?? '',
       size_label: item.size_title ?? '',
