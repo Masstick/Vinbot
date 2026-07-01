@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Language
+
+Always respond to the user in French, regardless of the language used in commits, code, or comments.
+
 ## What is Vinbot
 
 A Vinted deal-hunting bot: it scrapes Vinted.fr for second-hand listings matching configured keywords, computes a market average price and profit potential, then fires Telegram notifications and real-time WebSocket alerts to a dashboard.
