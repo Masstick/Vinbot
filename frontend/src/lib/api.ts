@@ -102,6 +102,14 @@ export interface Listing {
   country_code?: string;
   /** Real ISO country of the seller (from their Vinted profile). Preferred over country_code. */
   seller_country?: string;
+  /** Type de produit normalisé (règles ou Mistral). Absent/null = pas encore classé. */
+  product_type_key?: string | null;
+  /** Prix moyen tronqué du groupe, renseigné seulement si le groupe est fiable (≥5 annonces). */
+  avg_price?: number | null;
+  /** (avg_price - prix)/avg_price*100, calculé au moment de la classification. */
+  deal_score?: number | null;
+  /** true si deal_score dépasse le seuil "intéressant". */
+  is_deal?: boolean;
 }
 
 export interface KeywordListing {
@@ -133,6 +141,7 @@ export interface LatestListingsParams {
   q?: string;
   maxAgeHours?: number;
   soloSeller?: boolean;
+  onlyDeals?: boolean;
   userId?: number;
 }
 
@@ -163,6 +172,9 @@ function rowToKeywordListing(row: any): KeywordListing {
       freshness_hours: row.freshness_hours != null ? parseFloat(String(row.freshness_hours)) : undefined,
       country_code: row.country_code ?? undefined,
       seller_country: row.seller_country ?? undefined,
+      avg_price: row.avg_price != null ? parseFloat(String(row.avg_price)) : null,
+      deal_score: row.deal_score != null ? parseFloat(String(row.deal_score)) : null,
+      is_deal: row.is_deal === true,
     },
   };
 }
@@ -176,6 +188,7 @@ function latestQuery(p: LatestListingsParams): string {
   if (p.q) qs.set('q', p.q);
   if (p.maxAgeHours) qs.set('max_age_hours', String(p.maxAgeHours));
   if (p.soloSeller) qs.set('solo_seller', '1');
+  if (p.onlyDeals) qs.set('only_deals', '1');
   if (p.userId) qs.set('user_id', String(p.userId));
   const s = qs.toString();
   return s ? `?${s}` : '';
