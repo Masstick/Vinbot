@@ -68,4 +68,12 @@ export class Listing {
   /** Dernière vérification de disponibilité via l'item API (null = jamais vérifiée). */
   @Column({ type: 'timestamptz', nullable: true })
   availability_checked_at: Date | null;
+
+  /** Type de produit normalisé (règles ou Mistral). Null = pas encore classé, 'unclassified' = abandonné après 3 échecs Mistral. */
+  @Column({ type: 'varchar', length: 200, nullable: true })
+  product_type_key: string | null;
+
+  /** Nombre de tentatives de classification Mistral (plafonné à 3, voir ScraperService). */
+  @Column({ type: 'smallint', default: 0 })
+  product_type_attempts: number;
 }

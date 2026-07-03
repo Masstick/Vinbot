@@ -42,7 +42,9 @@ CREATE TABLE IF NOT EXISTS listings (
   vinted_created_at TIMESTAMPTZ,
   unavailable_at  TIMESTAMPTZ,
   unavailable_reason VARCHAR(10),
-  availability_checked_at TIMESTAMPTZ
+  availability_checked_at TIMESTAMPTZ,
+  product_type_key VARCHAR(200),
+  product_type_attempts SMALLINT NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS keyword_listings (
@@ -51,7 +53,17 @@ CREATE TABLE IF NOT EXISTS keyword_listings (
   matched_at        TIMESTAMPTZ DEFAULT NOW(),
   seller_item_count INTEGER,
   seller_checked_at TIMESTAMPTZ,
+  deal_score        DECIMAL(5,2),
   PRIMARY KEY (keyword_id, listing_id)
+);
+
+CREATE TABLE IF NOT EXISTS product_type_stats (
+  keyword_id        INTEGER NOT NULL REFERENCES keywords(id) ON DELETE CASCADE,
+  product_type_key  VARCHAR(200) NOT NULL,
+  avg_price         DECIMAL(10,2),
+  item_count        INTEGER NOT NULL DEFAULT 0,
+  last_updated      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (keyword_id, product_type_key)
 );
 
 CREATE TABLE IF NOT EXISTS price_history (
@@ -89,6 +101,7 @@ CREATE INDEX IF NOT EXISTS idx_kl_seller_item_count ON keyword_listings(seller_i
 CREATE INDEX IF NOT EXISTS idx_listings_seller_country ON listings(seller_country);
 CREATE INDEX IF NOT EXISTS idx_keywords_user_id ON keywords(user_id);
 CREATE INDEX IF NOT EXISTS idx_listings_availability ON listings (unavailable_at, availability_checked_at);
+CREATE INDEX IF NOT EXISTS idx_listings_product_type ON listings(product_type_key);
 
 -- ============================================================
 -- Tables côté VENTE (fondation auth + bloc A stock & commandes)

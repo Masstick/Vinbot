@@ -27,4 +27,8 @@ export class KeywordListing {
 
   @Column({ type: 'timestamptz', nullable: true })
   seller_checked_at: Date | null;
+
+  /** (avg_price - prix) / avg_price * 100, calculé une seule fois à la classification. Null tant que le type de produit n'est pas fiable (item_count < 5). */
+  @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true })
+  deal_score: number | null;
 }
