@@ -114,7 +114,7 @@ export function DealCard({ kl, live }: Props) {
         live
           ? 'border-red-500/50 shadow-[0_0_20px_-6px_rgba(244,63,94,0.4)]'
           : listing.is_deal
-            ? 'border-emerald-500/60 shadow-[0_0_20px_-6px_rgba(16,185,129,0.5)] animate-pulse'
+            ? 'border-emerald-500/60 shadow-[0_0_20px_-6px_rgba(16,185,129,0.5)]'
             : 'border-zinc-800/80 hover:border-zinc-700/80'
       }`}
     >
