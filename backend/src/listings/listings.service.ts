@@ -5,6 +5,7 @@ import { Listing } from './listing.entity';
 import { KeywordListing } from './keyword-listing.entity';
 import { PriceHistory } from './price-history.entity';
 import { Keyword } from '../keywords/keyword.entity';
+import { DEAL_SCORE_THRESHOLD } from './deal-score.constants';
 
 export interface VintedItem {
   vinted_id: number; title: string; price: number; url: string;
@@ -141,7 +142,7 @@ export class ListingsService {
     return { listing, isNew, priceChanged };
   }
 
-  async getListings(opts: { keywordId?: number; limit?: number; offset?: number; country?: string; q?: string; maxAgeHours?: number; soloSeller?: boolean; userId?: number } = {}): Promise<any[]> {
+  async getListings(opts: { keywordId?: number; limit?: number; offset?: number; country?: string; q?: string; maxAgeHours?: number; soloSeller?: boolean; userId?: number; onlyDeals?: boolean } = {}): Promise<any[]> {
     const limit = Math.min(Math.max(opts.limit ?? 100, 1), 500);
     const offset = Math.max(opts.offset ?? 0, 0);
     const params: any[] = [];
@@ -159,6 +160,9 @@ export class ListingsService {
       where.push(`kl.seller_item_count IS NOT NULL AND kl.seller_item_count <= 1`);
     }
     if (opts.userId) { params.push(opts.userId); where.push(`k.user_id = $${params.length}`); }
+    if (opts.onlyDeals) {
+      where.push(`kl.deal_score IS NOT NULL AND kl.deal_score >= ${DEAL_SCORE_THRESHOLD}`);
+    }
     // On masque les annonces détectées comme vendues/supprimées (vérif item API).
     where.push(`l.unavailable_at IS NULL`);
     // On respecte les bornes de prix ACTUELLES du mot-clé : si on modifie une recherche
@@ -173,11 +177,15 @@ export class ListingsService {
         SELECT DISTINCT ON (l.id)
           l.*, kl.matched_at,
           kl.seller_item_count,
+          kl.deal_score,
+          CASE WHEN pts.item_count >= 5 THEN pts.avg_price ELSE NULL END AS avg_price,
+          (kl.deal_score IS NOT NULL AND kl.deal_score >= ${DEAL_SCORE_THRESHOLD}) AS is_deal,
           k.label AS keyword_label, k.id AS keyword_id,
           EXTRACT(EPOCH FROM (NOW() - l.first_seen_at)) / 3600 AS freshness_hours
         FROM keyword_listings kl
         INNER JOIN listings l ON l.id = kl.listing_id
         INNER JOIN keywords k ON k.id = kl.keyword_id
+        LEFT JOIN product_type_stats pts ON pts.keyword_id = kl.keyword_id AND pts.product_type_key = l.product_type_key
         ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
         ORDER BY l.id, kl.matched_at DESC
       ) t

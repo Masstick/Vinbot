@@ -68,6 +68,36 @@ describe('ListingsService.getListings', () => {
     expect(sql).toContain('k.max_price IS NULL OR l.price <= k.max_price');
   });
 
+  it('joint product_type_stats et expose avg_price/deal_score/is_deal', async () => {
+    const queryMock = jest.fn().mockResolvedValue([]);
+    const svc = await buildService(queryMock);
+    await svc.getListings({});
+    const sql: string = queryMock.mock.calls[0][0];
+    expect(sql).toContain('LEFT JOIN product_type_stats pts');
+    expect(sql).toContain('pts.item_count >= 5 THEN pts.avg_price');
+    expect(sql).toContain('kl.deal_score >= 20');
+  });
+
+  it('ajoute le filtre onlyDeals quand demandé', async () => {
+    const queryMock = jest.fn().mockResolvedValue([]);
+    const svc = await buildService(queryMock);
+    await svc.getListings({ onlyDeals: true });
+    const sql: string = queryMock.mock.calls[0][0];
+    const whereClause = sql.slice(sql.indexOf('WHERE'));
+    expect(whereClause).toContain('kl.deal_score IS NOT NULL AND kl.deal_score >= 20');
+  });
+
+  it("n'ajoute pas le filtre onlyDeals par défaut", async () => {
+    const queryMock = jest.fn().mockResolvedValue([]);
+    const svc = await buildService(queryMock);
+    await svc.getListings({});
+    const sql: string = queryMock.mock.calls[0][0];
+    // Pas de clause WHERE dynamique par défaut (seulement les filtres toujours actifs :
+    // unavailable_at/min_price/max_price), donc pas de "kl.deal_score IS NOT NULL" dans le WHERE.
+    const whereClause = sql.slice(sql.indexOf('WHERE'));
+    expect(whereClause).not.toContain('kl.deal_score IS NOT NULL');
+  });
+
   it('getStats scopes active_keywords/alerts_24h/listings_24h by userId but keeps total_listings global', async () => {
     const queryMock = jest
       .fn()
