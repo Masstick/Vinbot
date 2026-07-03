@@ -54,6 +54,56 @@ export class ListingsService {
     );
   }
 
+  async setProductTypeKey(listingId: number, key: string): Promise<void> {
+    await this.dataSource.query(
+      `UPDATE listings SET product_type_key = $2 WHERE id = $1`,
+      [listingId, key],
+    );
+  }
+
+  async setDealScore(keywordId: number, listingId: number, dealScore: number): Promise<void> {
+    await this.dataSource.query(
+      `UPDATE keyword_listings SET deal_score = $3 WHERE keyword_id = $1 AND listing_id = $2`,
+      [keywordId, listingId, dealScore],
+    );
+  }
+
+  /** Annonces d'un mot-clé catégorie-seule pas encore classées (ni par les règles, ni
+   *  abandonnées après 3 échecs Mistral) — candidates au sweep périodique. */
+  async getUnclassifiedListings(limit: number): Promise<{ id: number; title: string; price: number; keywordId: number }[]> {
+    const rows = await this.dataSource.query(
+      `SELECT l.id, l.title, l.price, kl.keyword_id
+       FROM listings l
+       INNER JOIN keyword_listings kl ON kl.listing_id = l.id
+       INNER JOIN keywords k ON k.id = kl.keyword_id
+       WHERE l.product_type_key IS NULL
+         AND k.search_text = ''
+         AND l.product_type_attempts < 3
+       ORDER BY l.first_seen_at DESC
+       LIMIT $1`,
+      [limit],
+    );
+    return rows.map((r: any) => ({
+      id: r.id,
+      title: r.title,
+      price: parseFloat(r.price),
+      keywordId: r.keyword_id,
+    }));
+  }
+
+  /** Incrémente le compteur d'essais Mistral ; à la 3e tentative infructueuse,
+   *  bascule product_type_key sur la sentinelle 'unclassified' pour ne plus jamais
+   *  retenter (l'annonce reste visible normalement, juste jamais éligible à une alerte). */
+  async incrementClassificationAttempts(listingId: number): Promise<void> {
+    await this.dataSource.query(
+      `UPDATE listings
+       SET product_type_attempts = product_type_attempts + 1,
+           product_type_key = CASE WHEN product_type_attempts + 1 >= 3 THEN 'unclassified' ELSE product_type_key END
+       WHERE id = $1`,
+      [listingId],
+    );
+  }
+
   async upsertListing(item: VintedItem, keyword: Keyword, countryCode?: string): Promise<{ listing: Listing; isNew: boolean; priceChanged: boolean }> {
     const existing = await this.listingRepo.findOneBy({ vinted_id: item.vinted_id });
     let isNew = false; let priceChanged = false; let listing: Listing;

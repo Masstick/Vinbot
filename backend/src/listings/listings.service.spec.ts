@@ -80,3 +80,42 @@ describe('ListingsService.getListings', () => {
     expect(queryMock.mock.calls[0][0]).toContain('k.user_id');
   });
 });
+
+describe('ListingsService — classification', () => {
+  it('setProductTypeKey met à jour la colonne product_type_key', async () => {
+    const queryMock = jest.fn().mockResolvedValue([]);
+    const svc = await buildService(queryMock);
+    await svc.setProductTypeKey(42, 'RAM DDR4 8GB');
+    expect(queryMock).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE listings SET product_type_key'),
+      [42, 'RAM DDR4 8GB'],
+    );
+  });
+
+  it('setDealScore met à jour keyword_listings pour la paire (keyword_id, listing_id)', async () => {
+    const queryMock = jest.fn().mockResolvedValue([]);
+    const svc = await buildService(queryMock);
+    await svc.setDealScore(7, 42, 25.5);
+    expect(queryMock).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE keyword_listings SET deal_score'),
+      [7, 42, 25.5],
+    );
+  });
+
+  it('getUnclassifiedListings ne sélectionne que les mots-clés catégorie-seule sous 3 tentatives', async () => {
+    const queryMock = jest.fn().mockResolvedValue([{ id: 1, title: 'x', price: '10.00', keyword_id: 7 }]);
+    const svc = await buildService(queryMock);
+    const rows = await svc.getUnclassifiedListings(20);
+    expect(queryMock.mock.calls[0][0]).toContain("k.search_text = ''");
+    expect(queryMock.mock.calls[0][0]).toContain('product_type_attempts < 3');
+    expect(rows).toEqual([{ id: 1, title: 'x', price: 10, keywordId: 7 }]);
+  });
+
+  it('incrementClassificationAttempts bascule sur unclassified à la 3e tentative', async () => {
+    const queryMock = jest.fn().mockResolvedValue([]);
+    const svc = await buildService(queryMock);
+    await svc.incrementClassificationAttempts(42);
+    expect(queryMock.mock.calls[0][0]).toContain("'unclassified'");
+    expect(queryMock.mock.calls[0][1]).toEqual([42]);
+  });
+});
