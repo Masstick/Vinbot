@@ -111,7 +111,11 @@ export function DealCard({ kl, live }: Props) {
   return (
     <div
       className={`group bg-zinc-900/60 border rounded-2xl overflow-hidden hover:shadow-xl transition-all duration-300 hover:scale-[1.01] flex flex-col h-full ${
-        live ? 'border-red-500/50 shadow-[0_0_20px_-6px_rgba(244,63,94,0.4)]' : 'border-zinc-800/80 hover:border-zinc-700/80'
+        live
+          ? 'border-red-500/50 shadow-[0_0_20px_-6px_rgba(244,63,94,0.4)]'
+          : listing.is_deal
+            ? 'border-emerald-500/60 shadow-[0_0_20px_-6px_rgba(16,185,129,0.5)] animate-pulse'
+            : 'border-zinc-800/80 hover:border-zinc-700/80'
       }`}
     >
       {/* Product Image */}
@@ -147,6 +151,12 @@ export function DealCard({ kl, live }: Props) {
               <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white"></span>
             </span>
             LIVE
+          </span>
+        )}
+
+        {!live && listing.is_deal && (
+          <span className="absolute top-2.5 right-2.5 flex items-center gap-1 text-[10px] font-black tracking-wide px-2 py-0.5 rounded-lg bg-emerald-500/90 text-white shadow-lg backdrop-blur-md">
+            BONNE AFFAIRE
           </span>
         )}
 
@@ -186,8 +196,13 @@ export function DealCard({ kl, live }: Props) {
           </Link>
 
           {/* Pricing */}
-          <div className="flex items-baseline pt-1">
+          <div className="flex items-baseline gap-2 pt-1">
             <span className="text-xl font-black text-white">{price?.toFixed(1)}€</span>
+            {listing.avg_price != null && (
+              <span className="text-xs text-zinc-500">
+                moy. {parseFloat(String(listing.avg_price)).toFixed(1)}€
+              </span>
+            )}
           </div>
         </div>
 
