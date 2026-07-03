@@ -8,6 +8,9 @@ import { VintedClientPool } from './vinted.client';
 import { Keyword } from '../keywords/keyword.entity';
 import { Listing } from '../listings/listing.entity';
 import { AsyncQueue } from './async-queue';
+import { ProductClassifierService } from '../listings/product-classifier.service';
+import { ProductTypeStatsService } from '../listings/product-type-stats.service';
+import { DEAL_SCORE_THRESHOLD, MIN_RELIABLE_ITEM_COUNT } from '../listings/deal-score.constants';
 
 // Vérification du profil vendeur (filtre "vendeur unique") : on ne re-vérifie pas
 // un même vendeur/mot-clé plus d'une fois par fenêtre, pour limiter les appels Vinted.
@@ -20,6 +23,11 @@ const AVAILABILITY_STALE_SECONDS = 30 * 60;              // on ne vérifie que l
 const AVAILABILITY_RECENCY_SECONDS = 14 * 24 * 60 * 60;  // borne aux annonces vues pour la 1re fois < 14 jours
 const AVAILABILITY_BATCH_SIZE = 40;                      // annonces enfilées par tick (sous le plafond 1 req/s)
 const AVAILABILITY_TICK_MS = 45_000;                    // cadence d'enfilement
+
+// Classification différée (fallback Mistral) : reprend les annonces catégorie-seule
+// non reconnues par les règles, en tick périodique séparé du scan principal.
+const CLASSIFICATION_TICK_MS = 60_000;      // cadence du sweep Mistral
+const CLASSIFICATION_BATCH_SIZE = 20;       // annonces non classées traitées par tick
 
 // Scan principal : exécution parallèle bornée des scans (mot-clé × pays) dus, pour
 // réduire la latence de détection sans saturer Vinted. Le tick passe souvent vérifier
@@ -73,6 +81,8 @@ export class ScraperService implements OnModuleInit {
     private readonly telegramService: TelegramService,
     private readonly dealsGateway: DealsGateway,
     private readonly dataSource: DataSource,
+    private readonly productClassifier: ProductClassifierService,
+    private readonly productTypeStats: ProductTypeStatsService,
   ) {
     // 1 vérif/sec max : la vérification profil est secondaire, on ménage Vinted.
     this.sellerQueue = new AsyncQueue(this.processSellerCheck.bind(this), 1, 1);
@@ -87,6 +97,7 @@ export class ScraperService implements OnModuleInit {
     this.logger.log(`ScraperService initialisé — état : ${this.paused ? 'EN PAUSE' : 'actif'}, premier fast scan dans 5s`);
     setTimeout(() => this.scheduleFastTick(), 5000);
     setTimeout(() => this.scheduleAvailabilityTick(), 20_000);
+    setTimeout(() => this.scheduleClassificationTick(), 30_000);
   }
 
   /**
@@ -101,6 +112,20 @@ export class ScraperService implements OnModuleInit {
       await this.dataSource.query(
         `CREATE INDEX IF NOT EXISTS idx_listings_availability ON listings (unavailable_at, availability_checked_at)`,
       );
+      await this.dataSource.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS product_type_key VARCHAR(200)`);
+      await this.dataSource.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS product_type_attempts SMALLINT NOT NULL DEFAULT 0`);
+      await this.dataSource.query(`ALTER TABLE keyword_listings ADD COLUMN IF NOT EXISTS deal_score DECIMAL(5,2)`);
+      await this.dataSource.query(
+        `CREATE TABLE IF NOT EXISTS product_type_stats (
+           keyword_id        INTEGER NOT NULL REFERENCES keywords(id) ON DELETE CASCADE,
+           product_type_key  VARCHAR(200) NOT NULL,
+           avg_price         DECIMAL(10,2),
+           item_count        INTEGER NOT NULL DEFAULT 0,
+           last_updated      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+           PRIMARY KEY (keyword_id, product_type_key)
+         )`,
+      );
+      await this.dataSource.query(`CREATE INDEX IF NOT EXISTS idx_listings_product_type ON listings(product_type_key)`);
     } catch (err: any) {
       this.logger.error(`[Schema] colonnes de disponibilité non créées : ${err.message}`);
     }
@@ -290,28 +315,7 @@ export class ScraperService implements OnModuleInit {
       this.lastScrapeTime = new Date();
       if (items.length === 0) return;
 
-      let newCount = 0;
-      for (const item of items) {
-        const { listing, isNew, priceChanged } = await this.listingsService.upsertListing(item, keyword, countryCode);
-
-        // Filtre "vendeur unique" : on vérifie le profil du vendeur en arrière-plan.
-        this.queueSellerCheck(item.seller_id, keyword, countryCode);
-
-        if (isNew) {
-          this.dealsGateway.emitNewListing({
-            listingId: listing.id,
-            title: listing.title ?? item.title,
-            price: parseFloat(String(listing.price ?? item.price)),
-            photoUrl: listing.photo_url ?? null,
-            url: listing.url ?? null,
-            keywordLabel: keyword.label,
-            vintedCreatedAt: listing.vinted_created_at ? listing.vinted_created_at.toISOString() : null,
-            userId: keyword.user_id,
-          });
-          await this.maybeAlertNewListing(listing, keyword, countryCode);
-        }
-        if (isNew || priceChanged) newCount++;
-      }
+      const newCount = await this.scanAndProcess(keyword, items, countryCode);
 
       this.logger.log(`[FastScan] "${keyword.search_text}" [${countryCode}] → ${items.length} annonces, ${newCount} nouvelles/modifiées`);
     } catch (err: any) {
@@ -320,6 +324,107 @@ export class ScraperService implements OnModuleInit {
         await this.delay(60_000);
       } else {
         this.logger.error(`[FastScan] Keyword #${keyword.id} [${countryCode}]: ${err.message}`);
+      }
+    }
+  }
+
+  /** Traite un lot d'items déjà récupérés pour un mot-clé/pays : upsert, classification
+   *  (mots-clés catégorie-seule uniquement), émission WS, alerte. Isolé de
+   *  scanKeywordCountry pour être testable sans mocker le client Vinted. */
+  private async scanAndProcess(keyword: Keyword, items: any[], countryCode: string): Promise<number> {
+    let newCount = 0;
+    for (const item of items) {
+      const { listing, isNew, priceChanged } = await this.listingsService.upsertListing(item, keyword, countryCode);
+
+      // Filtre "vendeur unique" : on vérifie le profil du vendeur en arrière-plan.
+      this.queueSellerCheck(item.seller_id, keyword, countryCode);
+
+      if (isNew) {
+        let avgPrice: number | null = null;
+        let dealScore: number | null = null;
+        let isDeal = false;
+
+        const isCategoryOnly = keyword.search_text === '';
+        if (isCategoryOnly) {
+          const key = this.productClassifier.classifyByRules(item.title);
+          if (key) {
+            await this.listingsService.setProductTypeKey(listing.id, key);
+            const stats = await this.productTypeStats.recompute(keyword.id, key);
+            if (stats.itemCount >= MIN_RELIABLE_ITEM_COUNT) {
+              avgPrice = stats.avgPrice;
+              dealScore = ((stats.avgPrice - item.price) / stats.avgPrice) * 100;
+              await this.listingsService.setDealScore(keyword.id, listing.id, dealScore);
+              isDeal = dealScore >= DEAL_SCORE_THRESHOLD;
+            }
+          }
+        }
+
+        this.dealsGateway.emitNewListing({
+          listingId: listing.id,
+          title: listing.title ?? item.title,
+          price: parseFloat(String(listing.price ?? item.price)),
+          photoUrl: listing.photo_url ?? null,
+          url: listing.url ?? null,
+          keywordLabel: keyword.label,
+          vintedCreatedAt: listing.vinted_created_at ? listing.vinted_created_at.toISOString() : null,
+          userId: keyword.user_id,
+          avgPrice,
+          dealScore,
+          isDeal,
+        });
+
+        // Mots-clés catégorie-seule : alerte uniquement si intéressant.
+        // Mots-clés avec texte de recherche : comportement SP1 inchangé (alerte sur tout match).
+        if (!isCategoryOnly || isDeal) {
+          await this.maybeAlertNewListing(listing, keyword, countryCode);
+        }
+      }
+      if (isNew || priceChanged) newCount++;
+    }
+    return newCount;
+  }
+
+  // ── Classification différée (fallback Mistral) ─────────────────────────────
+  private scheduleClassificationTick(): void {
+    this.enqueueClassificationSweep()
+      .catch(err => this.logger.warn(`[Classification] tick: ${err.message}`))
+      .finally(() => {
+        setTimeout(() => this.scheduleClassificationTick(), CLASSIFICATION_TICK_MS);
+      });
+  }
+
+  private async enqueueClassificationSweep(): Promise<void> {
+    if (this.paused) return;
+    const candidates = await this.listingsService.getUnclassifiedListings(CLASSIFICATION_BATCH_SIZE);
+    for (const candidate of candidates) {
+      await this.classifyWithMistralAndScore(candidate);
+    }
+  }
+
+  private async classifyWithMistralAndScore(candidate: { id: number; title: string; price: number; keywordId: number }): Promise<void> {
+    const key = await this.productClassifier.classifyWithMistral(candidate.title);
+    if (!key) {
+      await this.listingsService.incrementClassificationAttempts(candidate.id);
+      return;
+    }
+    await this.listingsService.setProductTypeKey(candidate.id, key);
+    const stats = await this.productTypeStats.recompute(candidate.keywordId, key);
+
+    if (stats.itemCount < MIN_RELIABLE_ITEM_COUNT) {
+      this.dealsGateway.emitDealUpdated({ listingId: candidate.id, avgPrice: null, dealScore: null, isDeal: false });
+      return;
+    }
+
+    const dealScore = ((stats.avgPrice - candidate.price) / stats.avgPrice) * 100;
+    await this.listingsService.setDealScore(candidate.keywordId, candidate.id, dealScore);
+    const isDeal = dealScore >= DEAL_SCORE_THRESHOLD;
+    this.dealsGateway.emitDealUpdated({ listingId: candidate.id, avgPrice: stats.avgPrice, dealScore, isDeal });
+
+    if (isDeal) {
+      const listing = await this.listingsService.getListingById(candidate.id);
+      const keyword = await this.keywordsService.findOne(candidate.keywordId);
+      if (listing) {
+        await this.maybeAlertNewListing(listing, keyword, listing.country_code ?? 'fr');
       }
     }
   }

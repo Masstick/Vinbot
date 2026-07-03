@@ -16,6 +16,16 @@ export interface ListingEvent {
   keywordLabel: string;
   vintedCreatedAt: string | null;
   userId: number;
+  avgPrice: number | null;
+  dealScore: number | null;
+  isDeal: boolean;
+}
+
+export interface DealUpdatedEvent {
+  listingId: number;
+  avgPrice: number | null;
+  dealScore: number | null;
+  isDeal: boolean;
 }
 
 @WebSocketGateway({ cors: { origin: '*' } })
@@ -36,6 +46,12 @@ export class DealsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   emitNewListing(payload: ListingEvent) {
     this.server.emit('new-listing', payload);
     this.logger.log(`📡 Listing émis WS : "${payload.title}" — ${payload.price}€`);
+  }
+
+  /** Classification différée (sweep Mistral) : met à jour une carte déjà affichée. */
+  emitDealUpdated(payload: DealUpdatedEvent) {
+    this.server.emit('deal-updated', payload);
+    this.logger.log(`📡 Deal mis à jour WS : listing ${payload.listingId} — isDeal=${payload.isDeal}`);
   }
 
   emitKeywordChanged() {
