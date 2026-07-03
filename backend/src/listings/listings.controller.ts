@@ -14,6 +14,7 @@ export class ListingsController {
     @Query('q') q?: string,
     @Query('max_age_hours') maxAgeHours?: string,
     @Query('solo_seller') soloSeller?: string,
+    @Query('only_deals') onlyDeals?: string,
     @Query('user_id') userId?: string,
   ) {
     return this.service.getListings({
@@ -24,6 +25,7 @@ export class ListingsController {
       q: q || undefined,
       maxAgeHours: maxAgeHours ? parseInt(maxAgeHours) : undefined,
       soloSeller: soloSeller === '1' || soloSeller === 'true',
+      onlyDeals: onlyDeals === '1' || onlyDeals === 'true',
       userId: userId ? Number(userId) : undefined,
     });
   }
