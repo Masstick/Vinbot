@@ -395,14 +395,17 @@ export class ScraperService implements OnModuleInit {
 
   private async enqueueClassificationSweep(): Promise<void> {
     if (this.paused) return;
+    // Reprend aussi bien les annonces jamais passées par les règles (backfill des
+    // annonces déjà en base avant ce chantier) que celles où les règles ont échoué
+    // à l'ingestion — d'où le retest des règles ci-dessous avant le fallback Mistral.
     const candidates = await this.listingsService.getUnclassifiedListings(CLASSIFICATION_BATCH_SIZE);
     for (const candidate of candidates) {
-      await this.classifyWithMistralAndScore(candidate);
+      await this.classifyPendingListingAndScore(candidate);
     }
   }
 
-  private async classifyWithMistralAndScore(candidate: { id: number; title: string; price: number; keywordId: number }): Promise<void> {
-    const key = await this.productClassifier.classifyWithMistral(candidate.title);
+  private async classifyPendingListingAndScore(candidate: { id: number; title: string; price: number; keywordId: number }): Promise<void> {
+    const key = this.productClassifier.classifyByRules(candidate.title) ?? await this.productClassifier.classifyWithMistral(candidate.title);
     if (!key) {
       await this.listingsService.incrementClassificationAttempts(candidate.id);
       return;

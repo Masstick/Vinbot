@@ -148,7 +148,7 @@ describe('ScraperService — classification & gating des alertes', () => {
   });
 });
 
-describe('ScraperService — sweep Mistral', () => {
+describe('ScraperService — sweep de classification différée (règles + Mistral)', () => {
   function buildService(overrides: { listingsService?: any; productClassifier?: any; productTypeStats?: any; dealsGateway?: any; telegramService?: any; keywordsService?: any } = {}) {
     const dataSource: any = { query: jest.fn().mockResolvedValue([]) };
     const keywordsService: any = { findActive: jest.fn().mockResolvedValue([]), findOne: jest.fn(), ...overrides.keywordsService };
@@ -162,7 +162,9 @@ describe('ScraperService — sweep Mistral', () => {
     };
     const telegramService: any = { sendListingAlert: jest.fn().mockResolvedValue(undefined), ...overrides.telegramService };
     const dealsGateway: any = { emitDealUpdated: jest.fn(), ...overrides.dealsGateway };
-    const productClassifier: any = { classifyWithMistral: jest.fn(), ...overrides.productClassifier };
+    // classifyByRules retourne null par défaut : force le chemin Mistral dans les tests
+    // existants qui ne le mockent pas explicitement.
+    const productClassifier: any = { classifyByRules: jest.fn().mockReturnValue(null), classifyWithMistral: jest.fn(), ...overrides.productClassifier };
     const productTypeStats: any = { recompute: jest.fn(), ...overrides.productTypeStats };
     const service = new ScraperService(
       keywordsService, listingsService, telegramService, dealsGateway, dataSource, productClassifier, productTypeStats,
@@ -172,7 +174,7 @@ describe('ScraperService — sweep Mistral', () => {
 
   const candidate = { id: 42, title: 'Scheda Madre ASUS P8H67-M', price: 25, keywordId: 7 };
 
-  it("titre non reconnu par Mistral → incrémente les tentatives, pas de mise à jour de stats", async () => {
+  it("titre non reconnu par les règles ni par Mistral → incrémente les tentatives, pas de mise à jour de stats", async () => {
     const { service, listingsService, productClassifier } = buildService({
       listingsService: { getUnclassifiedListings: jest.fn().mockResolvedValue([candidate]) },
       productClassifier: { classifyWithMistral: jest.fn().mockResolvedValue(null) },
@@ -180,6 +182,18 @@ describe('ScraperService — sweep Mistral', () => {
     await (service as any).enqueueClassificationSweep();
     expect(listingsService.incrementClassificationAttempts).toHaveBeenCalledWith(42);
     expect(listingsService.setProductTypeKey).not.toHaveBeenCalled();
+  });
+
+  it("backfill : titre reconnu par les règles gratuites → classifie sans jamais appeler Mistral", async () => {
+    const ramCandidate = { id: 99, title: '16GB DDR4 Kingston', price: 20, keywordId: 7 };
+    const { service, listingsService, productClassifier } = buildService({
+      listingsService: { getUnclassifiedListings: jest.fn().mockResolvedValue([ramCandidate]) },
+      productClassifier: { classifyByRules: jest.fn().mockReturnValue('RAM DDR4 16GB') },
+      productTypeStats: { recompute: jest.fn().mockResolvedValue({ avgPrice: 25, itemCount: 3 }) },
+    });
+    await (service as any).enqueueClassificationSweep();
+    expect(listingsService.setProductTypeKey).toHaveBeenCalledWith(99, 'RAM DDR4 16GB');
+    expect(productClassifier.classifyWithMistral).not.toHaveBeenCalled();
   });
 
   it("titre reconnu par Mistral, groupe pas encore fiable → deal-updated avec avgPrice/dealScore null", async () => {
