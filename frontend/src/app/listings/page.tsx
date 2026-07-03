@@ -6,7 +6,7 @@ import { Newspaper, Filter, Search, Clock, Globe, RefreshCw, ChevronDown, UserCh
 import { useKeywordChanged } from '@/lib/useKeywordChanged';
 import { useRefreshSignal } from '@/lib/refreshEvent';
 import { useListingsSocket } from '@/lib/useListingsSocket';
-import { ListingEvent } from '@/lib/listingEvent';
+import { ListingEvent, DealUpdatedEvent } from '@/lib/listingEvent';
 import { useCurrentUser } from '@/lib/CurrentUserContext';
 
 const PAGE_SIZE = 48;
@@ -19,6 +19,7 @@ interface StoredFilters {
   search?: string;
   maxAgeHours?: number;
   soloSeller?: boolean;
+  onlyDeals?: boolean;
 }
 
 function loadStoredFilters(): StoredFilters {
@@ -52,6 +53,9 @@ function eventToKeywordListing(ev: ListingEvent): KeywordListing {
       first_seen_at: now,
       last_seen_at: now,
       vinted_created_at: ev.vintedCreatedAt,
+      avg_price: ev.avgPrice,
+      deal_score: ev.dealScore,
+      is_deal: ev.isDeal,
     } as Listing,
   };
 }
@@ -91,6 +95,7 @@ export default function LatestListingsPage() {
   const [debouncedSearch, setDebouncedSearch] = useState(initialFilters.current.search ?? '');
   const [maxAgeHours, setMaxAgeHours] = useState<number | undefined>(initialFilters.current.maxAgeHours);
   const [soloSeller, setSoloSeller] = useState(initialFilters.current.soloSeller ?? false);
+  const [onlyDeals, setOnlyDeals] = useState(initialFilters.current.onlyDeals ?? false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
@@ -102,7 +107,7 @@ export default function LatestListingsPage() {
   const { activeUserId } = useCurrentUser();
 
   const activeFilterCount =
-    [selectedKw != null, !!country, !!search, maxAgeHours != null, soloSeller].filter(Boolean).length;
+    [selectedKw != null, !!country, !!search, maxAgeHours != null, soloSeller, onlyDeals].filter(Boolean).length;
 
   useEffect(() => {
     if (activeUserId == null) {
@@ -120,9 +125,9 @@ export default function LatestListingsPage() {
 
   // Persiste les filtres (survit au reload / à la navigation)
   useEffect(() => {
-    const filters: StoredFilters = { selectedKw, country, search, maxAgeHours, soloSeller };
+    const filters: StoredFilters = { selectedKw, country, search, maxAgeHours, soloSeller, onlyDeals };
     window.localStorage.setItem(FILTERS_KEY, JSON.stringify(filters));
-  }, [selectedKw, country, search, maxAgeHours, soloSeller]);
+  }, [selectedKw, country, search, maxAgeHours, soloSeller, onlyDeals]);
 
   const baseParams = useCallback(() => ({
     keywordId: selectedKw,
@@ -130,9 +135,10 @@ export default function LatestListingsPage() {
     q: debouncedSearch || undefined,
     maxAgeHours,
     soloSeller: soloSeller || undefined,
+    onlyDeals: onlyDeals || undefined,
     userId: activeUserId ?? undefined,
     limit: PAGE_SIZE,
-  }), [selectedKw, country, debouncedSearch, maxAgeHours, soloSeller, activeUserId]);
+  }), [selectedKw, country, debouncedSearch, maxAgeHours, soloSeller, onlyDeals, activeUserId]);
 
   const load = useCallback((showSpinner: boolean) => {
     if (showSpinner) setLoading(true);
@@ -169,6 +175,7 @@ export default function LatestListingsPage() {
     if (activeUserId != null && ev.userId !== activeUserId) return false;
     // Pays et vendeur unique ne sont pas déductibles de l'event → on n'injecte pas en live dans ce cas
     if (country || soloSeller) return false;
+    if (onlyDeals && !ev.isDeal) return false;
     if (selectedKw != null) {
       const kw = keywords.find(k => k.id === selectedKw);
       if (kw && kw.label !== ev.keywordLabel) return false;
@@ -180,7 +187,7 @@ export default function LatestListingsPage() {
       if (ageH > maxAgeHours) return false;
     }
     return true;
-  }, [activeUserId, country, soloSeller, selectedKw, keywords, debouncedSearch, maxAgeHours]);
+  }, [activeUserId, country, soloSeller, onlyDeals, selectedKw, keywords, debouncedSearch, maxAgeHours]);
 
   const handleNewListing = useCallback((ev: ListingEvent) => {
     if (!matchesFilters(ev)) return;
@@ -202,7 +209,15 @@ export default function LatestListingsPage() {
     }, LIVE_BADGE_MS);
   }, [matchesFilters]);
 
-  const socketRef = useListingsSocket(handleNewListing);
+  const handleDealUpdated = useCallback((update: DealUpdatedEvent) => {
+    setItems(prev => prev.map(kl =>
+      kl.listing.id === update.listingId
+        ? { ...kl, listing: { ...kl.listing, avg_price: update.avgPrice, deal_score: update.dealScore, is_deal: update.isDeal } }
+        : kl,
+    ));
+  }, []);
+
+  const socketRef = useListingsSocket(handleNewListing, handleDealUpdated);
 
   useEffect(() => {
     const socket = socketRef.current;
@@ -373,6 +388,20 @@ export default function LatestListingsPage() {
           >
             <UserCheck size={14} />
             Vendeur unique
+          </button>
+        </div>
+
+        {/* Only deals toggle */}
+        <div className="w-full sm:w-auto flex items-end">
+          <button
+            onClick={() => setOnlyDeals(v => !v)}
+            className={`w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${
+              onlyDeals
+                ? 'bg-emerald-500/10 border-emerald-500 text-emerald-300'
+                : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-600'
+            }`}
+          >
+            Bonnes affaires uniquement
           </button>
         </div>
 
