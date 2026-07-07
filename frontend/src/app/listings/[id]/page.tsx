@@ -4,7 +4,8 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { api, PricePoint } from '@/lib/api';
 import { PriceChart } from '@/components/PriceChart';
-import { ArrowLeft, ExternalLink, Calculator, Tag, User, Calendar, Percent, ShieldCheck, X, ZoomIn } from 'lucide-react';
+import { ImageLightbox } from '@/components/ImageLightbox';
+import { ArrowLeft, ExternalLink, Calculator, Tag, User, Calendar, Percent, ShieldCheck, ZoomIn } from 'lucide-react';
 
 export default function ListingDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -13,15 +14,6 @@ export default function ListingDetailPage() {
   const [loading, setLoading] = useState(true);
   const [details, setDetails] = useState<{ description: string | null; photo_urls: string[] } | null>(null);
   const [zoomedUrl, setZoomedUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!zoomedUrl) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setZoomedUrl(null);
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [zoomedUrl]);
 
   // States pour la calculatrice d'arbitrage
   const [purchasePriceInput, setPurchasePriceInput] = useState<string>('');
@@ -352,28 +344,7 @@ export default function ListingDetailPage() {
         <PriceChart history={history} marketAvg={null} />
       </div>
 
-      {/* Zoom lightbox */}
-      {zoomedUrl && (
-        <div
-          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-6 cursor-zoom-out"
-          onClick={() => setZoomedUrl(null)}
-        >
-          <button
-            type="button"
-            onClick={() => setZoomedUrl(null)}
-            className="absolute top-4 right-4 bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 p-2 rounded-xl border border-zinc-700/60 transition-colors"
-            aria-label="Fermer"
-          >
-            <X size={18} />
-          </button>
-          <img
-            src={zoomedUrl}
-            alt=""
-            className="max-w-full max-h-full object-contain rounded-lg"
-            onClick={e => e.stopPropagation()}
-          />
-        </div>
-      )}
+      {zoomedUrl && <ImageLightbox url={zoomedUrl} onClose={() => setZoomedUrl(null)} />}
     </div>
   );
 }
