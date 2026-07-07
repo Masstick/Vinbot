@@ -189,10 +189,11 @@ export function DealCard({ kl, live }: Props) {
           {/* Title + optional country flag */}
           <Link
             href={`/listings/${listing.id}`}
-            className="flex items-center gap-1 text-sm font-semibold text-zinc-100 hover:text-indigo-400 transition-colors line-clamp-1 mt-1"
+            title={listing.title ?? undefined}
+            className="flex items-start gap-1 text-sm font-semibold text-zinc-100 hover:text-indigo-400 transition-colors mt-1"
           >
             {flag && <span className="shrink-0 text-base leading-none">{flag}</span>}
-            <span className="line-clamp-1">{listing.title ?? 'Sans titre'}</span>
+            <span className="line-clamp-2">{listing.title ?? 'Sans titre'}</span>
           </Link>
 
           {/* Pricing */}
