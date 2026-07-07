@@ -30,10 +30,19 @@ export class ProductClassifierService {
             {
               role: 'user',
               content:
-                `Extrais le type de produit générique (caractéristiques techniques ` +
-                `uniquement, sans marque) depuis ce titre d'annonce Vinted : "${title}". ` +
-                `Réponds uniquement avec le type de produit court (ex: "RAM DDR4 8GB", ` +
-                `"Carte mère ATX"), ou "INCONNU" si le titre ne décrit pas un composant PC identifiable.`,
+                `Extrais le type de produit depuis ce titre d'annonce Vinted : "${title}". ` +
+                `Réponds STRICTEMENT dans un de ces formats exacts (respecte espaces et casse), ` +
+                `sans marque ni mot en plus :\n` +
+                `- RAM : "RAM DDR<2-5> <capacité>GB" (ex: "RAM DDR4 8GB")\n` +
+                `- CPU Intel : "CPU i<3/5/7/9>-<référence>" (ex: "CPU i7-4790K")\n` +
+                `- CPU AMD : "CPU Ryzen <série> <référence>" (ex: "CPU Ryzen 5 3600")\n` +
+                `- Carte graphique : "GPU RTX/GTX/GT/RX <modèle>[ Ti/Super/XT]", sans "Nvidia"/"AMD" ` +
+                `(ex: "GPU RTX 3070 Ti", "GPU RX 580")\n` +
+                `- Carte mère : "Carte mère <chipset>" (ex: "Carte mère B450"), juste le chipset, sans marque\n` +
+                `- Stockage : "SSD/HDD/NVMe <capacité>GB ou TB" (ex: "SSD 500GB", "NVMe 1TB")\n` +
+                `Si le titre ne permet pas de déterminer précisément une référence/capacité dans un de ` +
+                `ces formats, réponds uniquement "INCONNU" — ne réponds jamais un type vague ` +
+                `(ex: pas de simple "GPU" ou "GPU 8GB" sans référence de modèle).`,
             },
           ],
         },
