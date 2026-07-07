@@ -37,8 +37,21 @@ describe('classifyTitle', () => {
     expect(classifyTitle('Carte graphique Nvidia GTX en panne')).toBeNull();
   });
 
+  it('reconnaît une carte graphique Nvidia collée sans espace au modèle', () => {
+    expect(classifyTitle('Nvidia RTX3060 Ti Founders Edition')).toBe('GPU RTX 3060 Ti');
+  });
+
+  it('reconnaît une carte graphique AMD collée sans espace au modèle', () => {
+    expect(classifyTitle('AMD RX580 8GB')).toBe('GPU RX 580');
+  });
+
   it('reconnaît une carte mère avec son chipset', () => {
     expect(classifyTitle('Carte mère Asus PRIME B450-PLUS')).toBe('Carte mère B450');
+  });
+
+  it('reconnaît une carte mère avec un chipset suivi d’un suffixe de variante collé', () => {
+    expect(classifyTitle('Carte mère Gigabyte B450M DS3H')).toBe('Carte mère B450');
+    expect(classifyTitle('Carte mère Asus X570S Aorus')).toBe('Carte mère X570');
   });
 
   it('retourne null pour une carte mère sans chipset reconnu', () => {
@@ -47,6 +60,10 @@ describe('classifyTitle', () => {
 
   it('reconnaît un SSD avec capacité en Go', () => {
     expect(classifyTitle('SSD Samsung 500GB 2.5"')).toBe('SSD 500GB');
+  });
+
+  it('reconnaît un SSD avec capacité collée sans espace', () => {
+    expect(classifyTitle('SSD240GB Kingston neuf')).toBe('SSD 240GB');
   });
 
   it('reconnaît un SSD NVMe avec capacité en To', () => {

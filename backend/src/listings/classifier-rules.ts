@@ -28,8 +28,12 @@ function extractGpuModel(title: string): string | null {
   return null;
 }
 
+// (?!\d) plutôt que \b final : un chipset est très souvent suivi d'une lettre de
+// variante collée sans espace (B450M, X570S, B550I...), et \b ne matche pas entre
+// deux caractères de mot (chiffre → lettre) donc ratait ces annonces. On exclut
+// juste un chiffre immédiatement après pour ne pas capturer un code plus long.
 const MOTHERBOARD_CHIPSETS =
-  /\b(z390|z490|z590|z690|z790|b360|b365|b450|b460|b550|b560|b650|b660|b760|h310|h370|h410|h510|h610|q370|x299|x370|x470|x570|x670|a320|a520|trx40)\b/i;
+  /\b(z390|z490|z590|z690|z790|b360|b365|b450|b460|b550|b560|b650|b660|b760|h310|h370|h410|h510|h610|q370|x299|x370|x470|x570|x670|a320|a520|trx40)(?!\d)/i;
 
 function extractMotherboardChipset(title: string): string | null {
   const m = title.match(MOTHERBOARD_CHIPSETS);
@@ -65,7 +69,10 @@ export const CLASSIFICATION_RULES: ClassificationRule[] = [
   },
   {
     family: 'GPU',
-    familyPattern: /\b(rtx|gtx|gt|radeon|rx|r9|r7|r5)\b/i,
+    // Lookahead sur un chiffre plutôt que \b final : les vendeurs collent souvent
+    // le préfixe au modèle sans espace ("RTX3060"), et \b ne matche pas entre deux
+    // caractères de mot (lettre → chiffre) donc ratait ces annonces.
+    familyPattern: /\b(?:rtx|gtx|gt)(?=[\s-]?\d)|\b(?:rx|r9|r7|r5)(?=[\s-]?\d)|\bradeon\b/i,
     extract: title => {
       const model = extractGpuModel(title);
       return model ? `GPU ${model}` : null;
@@ -81,11 +88,14 @@ export const CLASSIFICATION_RULES: ClassificationRule[] = [
   },
   {
     family: 'Stockage',
-    familyPattern: /\bssd\b|\bhdd\b|\bnvme\b|disque\s?dur/i,
+    // Pas de \b final après ssd/hdd/nvme : la capacité est souvent collée juste
+    // après ("SSD240GB"), et \b ne matche pas entre deux caractères de mot
+    // (lettre → chiffre) donc ratait ces annonces.
+    familyPattern: /\bssd|\bhdd|\bnvme|disque\s?dur/i,
     extract: title => {
       const capacity = extractStorageCapacity(title);
       if (!capacity) return null;
-      const type = /nvme/i.test(title) ? 'NVMe' : /\bssd\b/i.test(title) ? 'SSD' : 'HDD';
+      const type = /nvme/i.test(title) ? 'NVMe' : /\bssd/i.test(title) ? 'SSD' : 'HDD';
       return `${type} ${capacity}`;
     },
   },
