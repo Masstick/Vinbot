@@ -44,7 +44,10 @@ CREATE TABLE IF NOT EXISTS listings (
   unavailable_reason VARCHAR(10),
   availability_checked_at TIMESTAMPTZ,
   product_type_key VARCHAR(200),
-  product_type_attempts SMALLINT NOT NULL DEFAULT 0
+  product_type_attempts SMALLINT NOT NULL DEFAULT 0,
+  description TEXT,
+  photo_urls TEXT[],
+  details_fetched_at TIMESTAMPTZ
 );
 
 CREATE TABLE IF NOT EXISTS keyword_listings (

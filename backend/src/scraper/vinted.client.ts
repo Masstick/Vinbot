@@ -3,6 +3,7 @@ import { wrapper } from 'axios-cookiejar-support';
 import { CookieJar } from 'tough-cookie';
 import { Logger } from '@nestjs/common';
 import { VintedItem } from '../listings/listings.service';
+import { parseItemDetails, ItemDetails } from './item-detail-parser';
 
 const SESSION_TTL_MS = 90 * 60 * 1000; // 90 minutes
 
@@ -231,6 +232,41 @@ export class VintedClient {
         throw new Error('BANNED');
       }
       this.logger.warn(`Erreur getItemStatus [${this.countryCode}] item ${itemId}: ${err.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Récupère la description complète et toutes les photos d'une annonce, via la
+   * même page web que `getItemStatus` (pas l'API /items/{id}, cf. son commentaire
+   * sur les faux 404 cross-border). Appelé à la demande (ouverture de la fiche
+   * détail), jamais pendant le scan — une page fait ~2 Mo, contre quelques Ko pour
+   * l'API de recherche. Retourne null si l'annonce est inaccessible (vendue,
+   * supprimée, erreur) ; le tableau de photos est vide si aucune n'a été trouvée.
+   */
+  async getItemDetails(itemId: number): Promise<ItemDetails | null> {
+    await this.initSession();
+    try {
+      const response = await this.client.get(`${this.baseUrl}/items/${itemId}`, {
+        headers: {
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          Referer: `${this.baseUrl}/`,
+        },
+        timeout: 20000,
+        maxRedirects: 5,
+        responseType: 'text',
+        validateStatus: (s: number) => s < 500,
+      });
+      if (response.status >= 400) return null;
+      const html: string = typeof response.data === 'string' ? response.data : String(response.data ?? '');
+      return parseItemDetails(html);
+    } catch (err: any) {
+      if (err.response?.status === 403) {
+        this.logger.warn(`Vinted 403 [${this.countryCode}] item ${itemId} — reset session`);
+        this.resetSession();
+        throw new Error('BANNED');
+      }
+      this.logger.warn(`Erreur getItemDetails [${this.countryCode}] item ${itemId}: ${err.message}`);
       return null;
     }
   }

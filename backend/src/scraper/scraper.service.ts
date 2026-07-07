@@ -126,6 +126,9 @@ export class ScraperService implements OnModuleInit {
          )`,
       );
       await this.dataSource.query(`CREATE INDEX IF NOT EXISTS idx_listings_product_type ON listings(product_type_key)`);
+      await this.dataSource.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS description TEXT`);
+      await this.dataSource.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS photo_urls TEXT[]`);
+      await this.dataSource.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS details_fetched_at TIMESTAMPTZ`);
     } catch (err: any) {
       this.logger.error(`[Schema] colonnes de disponibilité non créées : ${err.message}`);
     }
@@ -251,6 +254,30 @@ export class ScraperService implements OnModuleInit {
         .push({ listingId: c.id, vintedId: Number(c.vinted_id), countryCode: c.country_code ?? 'fr' })
         .catch(() => {});
     }
+  }
+
+  /**
+   * Description complète + galerie photos d'une annonce, récupérées à la demande
+   * (ouverture de la fiche détail) et mises en cache en base — jamais refetch tant
+   * que `details_fetched_at` est renseigné. Retourne null si l'annonce est inconnue.
+   */
+  async getListingDetails(listingId: number): Promise<{ description: string | null; photo_urls: string[] } | null> {
+    const listing = await this.listingsService.getListingById(listingId);
+    if (!listing) return null;
+    if (listing.details_fetched_at) {
+      return { description: listing.description, photo_urls: listing.photo_urls ?? [] };
+    }
+    const client = this.clientPool.getClient(listing.country_code ?? 'fr');
+    let details: { description: string | null; photoUrls: string[] } | null = null;
+    try {
+      details = await client.getItemDetails(Number(listing.vinted_id));
+    } catch (err: any) {
+      this.logger.warn(`[Details] annonce ${listingId}: ${err.message}`);
+    }
+    const description = details?.description ?? null;
+    const photoUrls = details?.photoUrls ?? [];
+    await this.listingsService.setListingDetails(listingId, description, photoUrls);
+    return { description, photo_urls: photoUrls };
   }
 
   private async processAvailabilityCheck(item: AvailabilityCheckItem): Promise<void> {

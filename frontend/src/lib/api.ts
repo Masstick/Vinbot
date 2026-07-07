@@ -219,6 +219,7 @@ export const api = {
     get: (id: number) => req<any>(`/listings/${id}`),
     history: (id: number) => req<PricePoint[]>(`/listings/${id}/history`),
     stats: (userId?: number) => req<Stats>(`/listings/stats${userId ? `?user_id=${userId}` : ''}`),
+    details: (id: number) => req<{ description: string | null; photo_urls: string[] }>(`/scraper/listings/${id}/details`),
   },
   telegram: {
     test: (chatId: string) => req<{ ok: boolean; error?: string }>('/telegram/test', { method: 'POST', body: JSON.stringify({ chat_id: chatId }) }),

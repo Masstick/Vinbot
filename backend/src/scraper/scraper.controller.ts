@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, ParseIntPipe } from '@nestjs/common';
 import { ScraperService } from './scraper.service';
 
 @Controller('scraper')
@@ -8,6 +8,11 @@ export class ScraperController {
   @Get('status')
   status() {
     return this.service.getStatus();
+  }
+
+  @Get('listings/:id/details')
+  listingDetails(@Param('id', ParseIntPipe) id: number) {
+    return this.service.getListingDetails(id);
   }
 
   @Post('pause')

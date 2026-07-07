@@ -4,13 +4,24 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { api, PricePoint } from '@/lib/api';
 import { PriceChart } from '@/components/PriceChart';
-import { ArrowLeft, ExternalLink, Calculator, Tag, User, Calendar, Percent, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Calculator, Tag, User, Calendar, Percent, ShieldCheck, X, ZoomIn } from 'lucide-react';
 
 export default function ListingDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [listing, setListing] = useState<any>(null);
   const [history, setHistory] = useState<PricePoint[]>([]);
   const [loading, setLoading] = useState(true);
+  const [details, setDetails] = useState<{ description: string | null; photo_urls: string[] } | null>(null);
+  const [zoomedUrl, setZoomedUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!zoomedUrl) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setZoomedUrl(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [zoomedUrl]);
 
   // States pour la calculatrice d'arbitrage
   const [purchasePriceInput, setPurchasePriceInput] = useState<string>('');
@@ -38,6 +49,11 @@ export default function ListingDetailPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+
+    // Description + galerie photo : récupérées à la demande (peut être lent, ne doit
+    // pas bloquer l'affichage du reste de la fiche), donc en dehors du Promise.all ci-dessus.
+    setDetails(null);
+    api.listings.details(numId).then(setDetails).catch(() => {});
   }, [id]);
 
   // Calculs dynamiques de l'arbitrage
@@ -71,6 +87,12 @@ export default function ListingDetailPage() {
   if (!listing) return <div className="text-center text-zinc-500 py-24">Annonce introuvable ou supprimée.</div>;
 
   const listingPrice = listing.price ? parseFloat(String(listing.price)) : null;
+  const galleryUrls: string[] = details?.photo_urls?.length
+    ? details.photo_urls
+    : listing.photo_url
+      ? [listing.photo_url]
+      : [];
+  const mainPhotoUrl = galleryUrls[0] ?? null;
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -97,16 +119,53 @@ export default function ListingDetailPage() {
         <div className="lg:col-span-5 space-y-6">
           <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden backdrop-blur-md">
             {/* Image section */}
-            <div className="relative aspect-[4/3] bg-zinc-950">
-              {listing.photo_url ? (
-                <img src={listing.photo_url} alt="" className="w-full h-full object-cover" />
+            <div className="relative aspect-[4/3] bg-zinc-950 group">
+              {mainPhotoUrl ? (
+                <button
+                  type="button"
+                  onClick={() => setZoomedUrl(mainPhotoUrl)}
+                  className="w-full h-full block cursor-zoom-in"
+                  aria-label="Zoomer sur la photo"
+                >
+                  <img src={mainPhotoUrl} alt="" className="w-full h-full object-cover" />
+                  <span className="absolute bottom-2 right-2 bg-zinc-950/80 text-zinc-300 p-1.5 rounded-lg border border-zinc-800/80 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <ZoomIn size={14} />
+                  </span>
+                </button>
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-zinc-600 text-xs">
                   Aucune photo disponible
                 </div>
               )}
-              <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-transparent to-transparent opacity-60" />
+              <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-transparent to-transparent opacity-60 pointer-events-none" />
             </div>
+
+            {/* Galerie miniatures — visible dès que d'autres photos ont été récupérées */}
+            {galleryUrls.length > 1 && (
+              <div className="flex gap-1.5 p-3 pb-0 overflow-x-auto">
+                {galleryUrls.map((url, i) => (
+                  <button
+                    key={url}
+                    type="button"
+                    onClick={() => setZoomedUrl(url)}
+                    className={`shrink-0 w-14 h-14 rounded-lg overflow-hidden border transition-colors ${
+                      url === mainPhotoUrl ? 'border-indigo-500' : 'border-zinc-800 hover:border-zinc-600'
+                    }`}
+                    aria-label={`Photo ${i + 1}`}
+                  >
+                    <img src={url} alt="" className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Description complète (récupérée à la demande) */}
+            {details?.description && (
+              <div className="px-5 pt-4">
+                <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">Description</p>
+                <p className="text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed">{details.description}</p>
+              </div>
+            )}
 
             {/* Core Specs Details */}
             <div className="p-5 space-y-4">
@@ -292,6 +351,29 @@ export default function ListingDetailPage() {
         <h2 className="text-base font-bold text-white">Suivi de l'évolution du prix</h2>
         <PriceChart history={history} marketAvg={null} />
       </div>
+
+      {/* Zoom lightbox */}
+      {zoomedUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-6 cursor-zoom-out"
+          onClick={() => setZoomedUrl(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setZoomedUrl(null)}
+            className="absolute top-4 right-4 bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 p-2 rounded-xl border border-zinc-700/60 transition-colors"
+            aria-label="Fermer"
+          >
+            <X size={18} />
+          </button>
+          <img
+            src={zoomedUrl}
+            alt=""
+            className="max-w-full max-h-full object-contain rounded-lg"
+            onClick={e => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }

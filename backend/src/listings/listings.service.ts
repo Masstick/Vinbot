@@ -225,6 +225,18 @@ export class ListingsService {
     );
   }
 
+  /**
+   * Persiste description + photos récupérées à la demande (fiche détail). Marque
+   * `details_fetched_at` même si la récupération n'a rien donné (description null,
+   * photos vides), pour ne pas re-solliciter Vinted à chaque ouverture de la fiche.
+   */
+  async setListingDetails(listingId: number, description: string | null, photoUrls: string[]): Promise<void> {
+    await this.dataSource.query(
+      `UPDATE listings SET description = $2, photo_urls = $3, details_fetched_at = NOW() WHERE id = $1`,
+      [listingId, description, photoUrls],
+    );
+  }
+
   /** Marque une annonce comme vérifiée (toujours disponible). */
   async markListingChecked(listingId: number): Promise<void> {
     await this.dataSource.query(

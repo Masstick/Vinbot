@@ -76,4 +76,15 @@ export class Listing {
   /** Nombre de tentatives de classification Mistral (plafonné à 3, voir ScraperService). */
   @Column({ type: 'smallint', default: 0 })
   product_type_attempts: number;
+
+  /** Description complète et galerie photos, récupérées à la demande (voir ScraperService.getListingDetails). */
+  @Column({ type: 'text', nullable: true })
+  description: string | null;
+
+  @Column({ type: 'text', array: true, nullable: true })
+  photo_urls: string[] | null;
+
+  /** Null tant que la fiche détail n'a jamais été ouverte (pas encore de tentative de récupération). */
+  @Column({ type: 'timestamptz', nullable: true })
+  details_fetched_at: Date | null;
 }
