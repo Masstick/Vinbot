@@ -1,7 +1,7 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
-import { classifyTitle } from './classifier-rules';
+import { classifyTitle, isValidProductTypeKey } from './classifier-rules';
 
 @Injectable()
 export class ProductClassifierService {
@@ -50,6 +50,10 @@ export class ProductClassifierService {
       );
       const text: string | undefined = res.data?.choices?.[0]?.message?.content?.trim();
       if (!text || text.toUpperCase().includes('INCONNU')) return null;
+      if (!isValidProductTypeKey(text)) {
+        this.logger.warn(`Mistral a répondu hors format pour "${title}" : "${text}"`);
+        return null;
+      }
       return text;
     } catch (err: any) {
       this.logger.warn(`Classification Mistral échouée pour "${title}": ${err.message}`);

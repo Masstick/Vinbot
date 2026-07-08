@@ -50,5 +50,14 @@ describe('ProductClassifierService', () => {
       const result = await svc.classifyWithMistral('Ventilateur Noctua NF-A9');
       expect(result).toBeNull();
     });
+
+    it('rejette une réponse Mistral hors format (marque, vague, ou hors sujet)', async () => {
+      const config: any = { get: jest.fn().mockReturnValue('fake-key') };
+      const svc = new ProductClassifierService(config);
+      for (const garbage of ['GPU NVIDIA RTX 3070 Ti', 'GPU 8GB', 'GPU USB', 'GPU RTX Aorus']) {
+        mockedAxios.post.mockResolvedValueOnce({ data: { choices: [{ message: { content: garbage } }] } });
+        expect(await svc.classifyWithMistral('titre quelconque')).toBeNull();
+      }
+    });
   });
 });

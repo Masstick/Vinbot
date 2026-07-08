@@ -114,3 +114,15 @@ export function classifyTitle(title: string): string | null {
   }
   return null;
 }
+
+// Format exact produit par classifyTitle() ci-dessus. Sert à valider les réponses
+// Mistral : le prompt lui demande ce format mais rien ne garantit qu'il le suive
+// (observé en prod : réponses hors format du type "GPU RTX Aorus", "GPU USB",
+// ou l'écho brut d'un bout du prompt). Toute réponse qui ne matche pas exactement
+// est rejetée plutôt que stockée telle quelle, pour ne pas fragmenter les clés.
+const VALID_PRODUCT_TYPE_KEY =
+  /^(RAM DDR[2-5] \d+GB|CPU i[3579]-[A-Za-z0-9]+|CPU Ryzen \d+ [A-Za-z0-9]+|GPU (?:RTX|GTX|GT|RX) \d{3,4}(?: (?:Ti|Super|XT))?|Carte mère [A-Z0-9]+|(?:SSD|HDD|NVMe) \d+(?:\.\d+)?(?:GB|TB))$/;
+
+export function isValidProductTypeKey(key: string): boolean {
+  return VALID_PRODUCT_TYPE_KEY.test(key.trim());
+}
